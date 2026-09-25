@@ -1,0 +1,68 @@
+/**
+ * Respondent protections on the demo survey (run `npm run seed:demo` once):
+ * resume, back navigation, required answers, submit-once lock and neutral
+ * handling of altered links. SR-12, SR-16, SR-17, SR-39; AT-12, AT-16, AT-17.
+ */
+import { expect, test } from "@playwright/test";
+import { adminCredentials, createTestLink, ensureTestShop, respondentPhone, signIn } from "./helpers";
+
+test.skip(!adminCredentials(), "Set E2E_EMAIL and E2E_PASSWORD to run browser tests");
+
+test("respondent can resume, is guided through errors, and submits exactly once", async ({ page, browser }) => {
+  await signIn(page);
+  await ensureTestShop(page);
+  await page.goto("/psg/instruments");
+  await page.getByRole("link", { name: "Demo survey (TEST)" }).click();
+  const url = await createTestLink(page);
+
+  const phone = await respondentPhone(browser);
+  await phone.goto(url);
+
+  // Answer page 1; the follow-up appears only for "No"
+  await phone.locator("label", { hasText: /^4$/ }).first().click();
+  await expect(phone.getByText("What happened with the timing")).toHaveCount(0);
+  await phone.getByLabel("No", { exact: true }).check();
+  await phone.getByLabel(/What happened with the timing/).fill("One day late");
+  for (const row of ["Communication during the repair", "Quality of the repair", "Cleanliness of the vehicle at pickup"]) {
+    await phone.getByRole("group", { name: row }).getByLabel("Good").check();
+  }
+  await expect(phone.locator('[role="status"]', { hasText: /Saved [0-9]/ })).toBeVisible();
+
+  // Resume with the same link (SR-16)
+  await phone.reload();
+  await expect(phone.getByLabel(/What happened with the timing/)).toHaveValue("One day late");
+
+  // Next and Back keep answers
+  await phone.getByRole("button", { name: "Next", exact: true }).click();
+  await phone.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(phone.getByLabel("No", { exact: true })).toBeChecked();
+  await phone.getByRole("button", { name: "Next", exact: true }).click();
+
+  // A missing required answer is explained and focused (SR-39)
+  await phone.getByRole("button", { name: "Submit survey" }).click();
+  const summary = phone.getByRole("alert").filter({ hasText: "Please check" });
+  await expect(summary).toBeFocused();
+
+  // Keyboard selects a rating
+  await phone.locator('input[name="survey-recommend_score"]').first().focus();
+  await phone.keyboard.press("ArrowRight");
+  await expect(phone.locator('input[name="survey-recommend_score"]:checked')).toHaveValue("1");
+
+  // Double click submits once and locks the survey (SR-17)
+  await phone.getByRole("button", { name: "Submit survey" }).dblclick();
+  await expect(phone.getByText("Thank you for your feedback")).toBeVisible();
+  await phone.reload();
+  await expect(phone.getByText("Thank you for your feedback")).toBeVisible();
+  await expect(phone.locator("form")).toHaveCount(0);
+
+  // An altered link reveals nothing (AT-12)
+  const altered = url.slice(0, -1) + (url.endsWith("A") ? "B" : "A");
+  await phone.goto(altered);
+  await expect(phone.getByText("This survey link is not valid")).toBeVisible();
+
+  // PSG sees this link (the newest row) as submitted. Duplicate-submit races are covered by the database tests.
+  await page.reload();
+  const newest = page.locator('section[aria-labelledby="test-links"] tbody tr').first();
+  await expect(newest).toContainText("Submitted");
+  await expect(newest.getByRole("link", { name: "View answers and scores" })).toHaveCount(1);
+});

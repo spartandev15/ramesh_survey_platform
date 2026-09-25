@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "vulnerabilityAlerts": { "enabled": true, "labels": ["security"] },
+  "packageRules": [
+    {
+      "description": "Framework, auth, database and job-queue updates are reviewed individually",
+      "matchPackageNames": ["next", "better-auth", "drizzle-orm", "drizzle-kit", "pg-boss", "pg"],
+      "labels": ["core-dependency"]
+    },
+    {
+      "description": "Batch low-risk dev tooling",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["*", "!drizzle-kit"],
+      "groupName": "dev tooling"
+    }
+  ]
+}

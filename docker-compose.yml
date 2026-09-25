@@ -1,0 +1,60 @@
+# Local development and single-server deployment.
+#
+#   docker compose up -d db                  # only the database, for `npm run dev`
+#   docker compose --profile app up -d       # full stack: db, migrate, web, worker
+#
+# With EMAIL_PROVIDER=log every email is written to the web/worker logs instead of being sent.
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: psg
+      POSTGRES_PASSWORD: psg
+      POSTGRES_DB: psg_survey
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psg -d psg_survey"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    profiles: ["app"]
+    build: .
+    command: ["npm", "run", "db:migrate"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://psg:psg@db:5432/psg_survey
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    profiles: ["app"]
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://psg:psg@db:5432/psg_survey
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    profiles: ["app"]
+    build: .
+    command: ["npm", "run", "worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://psg:psg@db:5432/psg_survey
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
