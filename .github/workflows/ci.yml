@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+# Settings for a throwaway CI database only; nothing here is used anywhere else.
+env:
+  DATABASE_URL: postgres://psg:psg@localhost:5432/psg_survey
+  APP_URL: http://localhost:3000
+  BETTER_AUTH_SECRET: ci-only-secret-for-a-throwaway-database-0001
+  EMAIL_PROVIDER: log
+  EMAIL_FROM: no-reply@ci.invalid
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -19,8 +27,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U psg -d psg_survey"
           --health-interval 5s --health-timeout 3s --health-retries 10
-    env:
-      DATABASE_URL: postgres://psg:psg@localhost:5432/psg_survey
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -31,12 +37,60 @@ jobs:
       - run: npm run lint
       - run: npx next typegen
       - run: npm run typecheck
-      - run: npm test
-      # Migrations must apply cleanly to an empty database.
+      # Migrations must apply cleanly to an empty database, before the database tests use it.
       - run: npm run db:migrate
       # Schema and committed migrations must agree.
       - run: npx drizzle-kit check
+      - run: npm test
       - run: npm run build
+
+  # The critical journeys and accessibility in a real browser against the production build (PDF 07).
+  e2e:
+    runs-on: ubuntu-latest
+    needs: verify
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: psg
+          POSTGRES_PASSWORD: psg
+          POSTGRES_DB: psg_survey
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U psg -d psg_survey"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      E2E_EMAIL: e2e-admin@psg-survey.test
+      E2E_PASSWORD: ci-e2e-password-0001
+      ADMIN_PASSWORD: ci-e2e-password-0001
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: npm run create-admin -- "$E2E_EMAIL" "E2E Admin"
+      - run: npm run seed:demo
+      - run: npx playwright install --with-deps chrome
+      - run: npm run build
+      - name: Start the app and the worker
+        run: |
+          nohup npx next start -p 3000 > server.log 2>&1 &
+          nohup npm run worker > worker.log 2>&1 &
+          for i in $(seq 60); do curl -sf http://localhost:3000/login > /dev/null && exit 0; sleep 2; done
+          cat server.log; exit 1
+      - run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            test-results/
+            server.log
+            worker.log
+          retention-days: 7
 
   docker:
     runs-on: ubuntu-latest

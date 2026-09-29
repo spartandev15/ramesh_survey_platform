@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import {
   alertApproval,
@@ -24,7 +24,7 @@ import { listProblems } from "@/modules/email-ledger/store";
 import { STOP_LABELS } from "@/modules/email-ledger/policy";
 import { REASON_LABELS } from "@/modules/imports/eligibility";
 import { listUnsent, shopsWithUnsent } from "@/modules/invitations/store";
-import { isSubjectType, isSuppressionOverdue, WORKER_FAILURE_DAYS, workerHealth, type QueueKind, type SubjectType } from "./policy";
+import { isReviewableType, isSubjectType, isSuppressionOverdue, WORKER_FAILURE_DAYS, workerHealth, type QueueKind, type SubjectType } from "./policy";
 
 /**
  * Operator queues (SR-38). Items stay in the tables that own them and are
@@ -132,6 +132,46 @@ async function heldImports(tx: Tx, includeTest: boolean): Promise<Draft[]> {
     }
   }
   return items;
+}
+
+/**
+ * File rows that never became a visit: held for an unclear visit identity, or
+ * rejected (AT-07). They stay on the queue until someone records what they did.
+ */
+async function heldRows(tx: Tx, includeTest: boolean): Promise<Draft[]> {
+  const rows = await tx
+    .select({ id: importRow.id, rowNumber: importRow.rowNumber, action: importRow.action, reasons: importRow.reasons, batchId: importBatch.id, fileName: importBatch.fileName, isTest: importBatch.isTest, committedAt: importBatch.committedAt, shopId: shop.id, shopName: shop.name })
+    .from(importRow)
+    .innerJoin(importBatch, eq(importBatch.id, importRow.batchId))
+    .innerJoin(shop, eq(shop.id, importBatch.shopId))
+    .where(
+      and(
+        eq(importBatch.status, "committed"),
+        eq(importBatch.kind, "visits"),
+        inArray(importRow.action, ["held", "rejected"]),
+        isNull(importRow.visitId),
+        isNull(shop.archivedAt),
+        includeTest ? undefined : eq(importBatch.isTest, false),
+        sql`NOT EXISTS (SELECT 1 FROM operator_item o WHERE o.subject_type = 'import_row' AND o.subject_id = ${importRow.id}::text AND o.reviewed_at IS NOT NULL)`,
+      ),
+    )
+    .orderBy(asc(importBatch.committedAt), asc(importRow.rowNumber))
+    .limit(PER_KIND);
+  return rows.map((r) => ({
+    kind: "held_import",
+    subjectType: "import_row",
+    subjectId: String(r.id),
+    shopId: r.shopId,
+    shopName: r.shopName,
+    isTest: r.isTest,
+    title: `${r.action === "rejected" ? "Rejected" : "Held"} row ${r.rowNumber} · ${r.fileName}`,
+    reason: r.reasons.map((code) => REASON_LABELS[code as keyof typeof REASON_LABELS] ?? code).join("; ") || "Needs PSG review",
+    provenance: `No visit was created from this row. Imported from ${r.fileName}, row ${r.rowNumber}`,
+    since: r.committedAt ?? new Date(0),
+    overdue: false,
+    href: `/psg/imports/${r.batchId}`,
+    hrefLabel: "Open the import",
+  }));
 }
 
 async function emailItems(tx: Tx): Promise<Draft[]> {
@@ -292,7 +332,7 @@ function describeAudit(after: unknown): string | null {
 export async function listOperatorItems(tx: Tx, now = new Date(), options: { history?: boolean; includeTest?: boolean } = {}): Promise<OperatorItem[]> {
   // Test data is skipped in the queries themselves when not asked for, so hiding it also saves the work.
   const includeTest = options.includeTest ?? true;
-  const drafts = [...(await heldImports(tx, includeTest)), ...(await emailItems(tx)), ...(await workerItems(tx, now)), ...(await pendingMatches(tx, includeTest)), ...(await suppressionItems(tx, now))].filter(
+  const drafts = [...(await heldImports(tx, includeTest)), ...(await heldRows(tx, includeTest)), ...(await emailItems(tx)), ...(await workerItems(tx, now)), ...(await pendingMatches(tx, includeTest)), ...(await suppressionItems(tx, now))].filter(
     (d) => includeTest || !d.isTest,
   );
   if (drafts.length === 0) return [];
@@ -394,12 +434,15 @@ async function subjectExists(tx: Tx, subjectType: SubjectType, subjectId: string
       return uuid && (await tx.select({ id: surveyResponse.id }).from(surveyResponse).where(eq(surveyResponse.id, subjectId))).length > 0;
     case "suppression_action":
       return uuid && (await tx.select({ id: suppressionAction.id }).from(suppressionAction).where(eq(suppressionAction.id, subjectId))).length > 0;
+    case "import_row":
+      return /^\d{1,15}$/.test(subjectId) && (await tx.select({ id: importRow.id }).from(importRow).where(eq(importRow.id, Number(subjectId)))).length > 0;
   }
 }
 
 /** The shop an item belongs to, for the audit row; null for worker items or an unconfirmed shop. */
 async function subjectShopId(tx: Tx, subjectType: SubjectType, subjectId: string): Promise<string | null> {
   if (subjectType === "invitation") return (await tx.select({ shopId: invitation.shopId }).from(invitation).where(eq(invitation.id, subjectId)))[0]?.shopId ?? null;
+  if (subjectType === "import_row") return (await tx.select({ shopId: importBatch.shopId }).from(importRow).innerJoin(importBatch, eq(importBatch.id, importRow.batchId)).where(eq(importRow.id, Number(subjectId))))[0]?.shopId ?? null;
   if (subjectType === "survey_response") return (await tx.select({ shopId: surveyResponse.shopId }).from(surveyResponse).where(eq(surveyResponse.id, subjectId)))[0]?.shopId ?? null;
   if (subjectType === "suppression_action") {
     const [row] = await tx.select({ shopId: surveyResponse.shopId }).from(suppressionAction).innerJoin(surveyResponse, eq(surveyResponse.id, suppressionAction.responseId)).where(eq(suppressionAction.id, subjectId));
@@ -479,20 +522,33 @@ export async function assignOwner(tx: Tx, actor: Actor, subjectTypeInput: string
 }
 
 /**
- * Record that a person looked at a failed background job and what they did
- * (AT-38: resolved under authorization). The job and its error stay in
- * pg-boss unchanged; the review only takes it off the queue.
+ * Take a failed job or an import row off the queue with a note of what a
+ * person checked or did (AT-07, AT-38: resolved under authorization). The job
+ * (in pg-boss) or row itself stays unchanged; the review is kept on the item
+ * and in its history.
  */
-export async function reviewWorkerFailure(tx: Tx, actor: Actor, jobId: string, expectedRevision: number, note: string, now = new Date()) {
-  await checkedSubject(tx, "worker_job", jobId);
+export async function reviewItem(tx: Tx, actor: Actor, subjectTypeInput: string, subjectId: string, expectedRevision: number, note: string, now = new Date()) {
+  if (!isReviewableType(subjectTypeInput)) throw new OperationsError("invalid", "This item cannot be marked reviewed.");
+  const subjectType = await checkedSubject(tx, subjectTypeInput, subjectId);
   const trimmed = note.trim();
   if (trimmed.length < 5) throw new OperationsError("invalid", "Describe what you checked or fixed.");
-  const row = await lockItem(tx, "worker_job", jobId, expectedRevision);
-  if (row?.reviewedAt) throw new OperationsError("conflict", "This failure was already reviewed.");
+  const row = await lockItem(tx, subjectType, subjectId, expectedRevision);
+  if (row?.reviewedAt) throw new OperationsError("conflict", "This item was already reviewed.");
   const values = { reviewedAt: now, reviewedBy: actor.userId, reviewNote: trimmed.slice(0, 1000), updatedAt: now };
   const revision = row
-    ? (await tx.update(operatorItem).set({ ...values, revision: row.revision + 1 }).where(and(eq(operatorItem.subjectType, "worker_job"), eq(operatorItem.subjectId, jobId))).returning({ revision: operatorItem.revision }))[0].revision
-    : await insertItem(tx, { subjectType: "worker_job", subjectId: jobId, ...values });
-  await recordAudit({ actorType: "user", actorUserId: actor.userId, action: "operator.failure_reviewed", subjectType: "worker_job", subjectId: jobId, after: { note: trimmed.slice(0, 1000) } }, tx);
+    ? (await tx.update(operatorItem).set({ ...values, revision: row.revision + 1 }).where(and(eq(operatorItem.subjectType, subjectType), eq(operatorItem.subjectId, subjectId))).returning({ revision: operatorItem.revision }))[0].revision
+    : await insertItem(tx, { subjectType, subjectId, ...values });
+  await recordAudit(
+    {
+      actorType: "user",
+      actorUserId: actor.userId,
+      shopId: await subjectShopId(tx, subjectType, subjectId),
+      action: subjectType === "worker_job" ? "operator.failure_reviewed" : "operator.row_reviewed",
+      subjectType,
+      subjectId,
+      after: { note: trimmed.slice(0, 1000) },
+    },
+    tx,
+  );
   return { revision };
 }

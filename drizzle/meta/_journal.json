@@ -190,6 +190,27 @@
       "when": 1790603497660,
       "tag": "0026_ops_notice",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790697768285,
+      "tag": "0027_submit_key_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790698154814,
+      "tag": "0028_operator_item_import_row",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790698726791,
+      "tag": "0029_import_kind_opt_outs",
+      "breakpoints": true
     }
   ]
 }

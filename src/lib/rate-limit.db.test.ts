@@ -13,7 +13,7 @@ try {
 
 describe.skipIf(!process.env.DATABASE_URL)("rate limit under concurrency", async () => {
   const { getDb, getPool } = await import("@/db/client");
-  const { consumeRateLimit } = await import("./rate-limit");
+  const { clientAddress, consumeRateLimit } = await import("./rate-limit");
   const { sql } = await import("drizzle-orm");
   const prefix = `test:concurrent:${Date.now()}:${Math.random()}`;
 
@@ -31,5 +31,19 @@ describe.skipIf(!process.env.DATABASE_URL)("rate limit under concurrency", async
       expect(results.filter(Boolean)).toHaveLength(6);
       expect(results.filter((allowed) => !allowed)).toHaveLength(2);
     }
+  });
+
+  it("uses the address our proxy appended, so a client cannot pick its own rate-limit bucket", () => {
+    const h = (xff?: string, realIp?: string) => new Headers({ ...(xff ? { "x-forwarded-for": xff } : {}), ...(realIp ? { "x-real-ip": realIp } : {}) });
+    // A client-supplied first entry is ignored; the entry the proxy appended counts.
+    expect(clientAddress(h("1.1.1.1, 203.0.113.9"), 1)).toBe("203.0.113.9");
+    expect(clientAddress(h("1.1.1.1, 203.0.113.9, 10.0.0.2"), 2)).toBe("203.0.113.9");
+    // No proxy: Next.js fills the header from the connection.
+    expect(clientAddress(h("::1"), 1)).toBe("::1");
+    expect(clientAddress(h(undefined, "198.51.100.4"), 1)).toBe("198.51.100.4");
+    // Garbage never becomes a key.
+    expect(clientAddress(h("1.1.1.1, <script>"), 1)).toBe("unknown");
+    expect(clientAddress(h(`1.1.1.1, ${"9".repeat(500)}`), 1)).toBe("unknown");
+    expect(clientAddress(h(), 1)).toBe("unknown");
   });
 });

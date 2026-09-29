@@ -116,6 +116,8 @@ export async function prepareNext(tx: Tx, owner: string, links: LinkConfig, now:
     return { kind: "stopped", intentId: intent.id, state, reason };
   };
   if (!ctx?.visit || !ctx.customer) return stop("cancelled", "NOT_IMPORTED");
+  // An archived shop never emails anyone again, test sends included.
+  if (ctx.shop.archivedAt) return stop("cancelled", "SHOP_ARCHIVED");
 
   const recipient = normalizeEmail(intent.recipient);
   const [submitted] = await tx
@@ -218,7 +220,7 @@ async function intentShopId(tx: Tx, intent: IntentRow): Promise<string | null> {
  */
 async function prepareAlert(tx: Tx, intent: IntentRow, approvalId: string, owner: string, links: LinkConfig, now: Date): Promise<Prepared> {
   const [ctx] = await tx
-    .select({ approval: alertApproval, case: alertCase, shopName: shop.name, brandColor: shop.brandColor })
+    .select({ approval: alertApproval, case: alertCase, shopName: shop.name, brandColor: shop.brandColor, archivedAt: shop.archivedAt })
     .from(alertApproval)
     .innerJoin(alertCase, eq(alertCase.id, alertApproval.caseId))
     .innerJoin(shop, eq(shop.id, alertCase.shopId))
@@ -230,6 +232,7 @@ async function prepareAlert(tx: Tx, intent: IntentRow, approvalId: string, owner
     return { kind: "stopped", intentId: intent.id, state: "cancelled", reason: reason as StopReason };
   };
   if (!ctx || ctx.case.status !== "approved") return stop("ALERT_NOT_APPROVED");
+  if (ctx.archivedAt) return stop("SHOP_ARCHIVED");
   const recipient = normalizeEmail(intent.recipient);
   if (!recipient) return stop("EMAIL_NEEDED");
   if (intent.isTest) {

@@ -50,6 +50,7 @@ export function UploadForm({ shops, sourceSystems }: { shops: { id: string; name
           <option value="visits">Customer repair visits</option>
           <option value="legacy_ledger">Legacy survey history (sent and completed)</option>
           <option value="legacy_cases">Legacy follow-up cases (open and closed)</option>
+          <option value="opt_outs">Existing opt-out list (emails)</option>
         </select>
       </div>
       <div className="flex flex-col gap-1.5">

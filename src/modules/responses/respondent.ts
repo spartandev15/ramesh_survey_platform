@@ -40,8 +40,8 @@ export async function saveSurveyDraft(token: string, address: string, expectedRe
   return getDb().transaction((tx) => store.saveDraft(tx, token, expectedRevision, answers));
 }
 
-export async function submitSurvey(token: string, address: string, requestKey: string, answers: unknown): Promise<store.SubmitResult> {
+export async function submitSurvey(token: string, address: string, requestKey: string, answers: unknown, expectedRevision: number): Promise<store.SubmitResult> {
   await limit("submit", address, token, 30, 10);
-  if (!isWellFormedToken(token) || !/^[A-Za-z0-9-]{8,64}$/.test(requestKey)) return { ok: false, reason: "invalid" };
-  return getDb().transaction((tx) => store.submitResponse(tx, token, requestKey, answers));
+  if (!isWellFormedToken(token) || !/^[A-Za-z0-9-]{8,64}$/.test(requestKey) || !Number.isInteger(expectedRevision) || expectedRevision < 0) return { ok: false, reason: "invalid" };
+  return getDb().transaction((tx) => store.submitResponse(tx, token, requestKey, answers, new Date(), expectedRevision));
 }

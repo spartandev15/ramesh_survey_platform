@@ -29,12 +29,16 @@ export class MemoryBridgeAdapter implements BridgeAdapter {
   readonly records = new Map<string, { key: string; record: BridgeRecord }>();
   offline = false;
   writes = 0;
+  /** A field FileMaker silently drops on write (a missing or too-short field), to prove the read-back check. */
+  dropOnWrite: string | null = null;
 
   async upsert(key: string, record: BridgeRecord) {
     if (this.offline) throw new Error("FileMaker is not reachable");
     this.writes++;
     const externalId = `fm-${key}`;
-    this.records.set(externalId, { key, record: structuredClone(record) });
+    const stored = structuredClone(record);
+    if (this.dropOnWrite) delete stored[this.dropOnWrite];
+    this.records.set(externalId, { key, record: stored });
     return { externalId };
   }
 

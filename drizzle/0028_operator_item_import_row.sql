@@ -1,0 +1,2 @@
+ALTER TABLE "operator_item" DROP CONSTRAINT "operator_item_subject_type";--> statement-breakpoint
+ALTER TABLE "operator_item" ADD CONSTRAINT "operator_item_subject_type" CHECK ("operator_item"."subject_type" IN ('invitation', 'email_intent', 'survey_response', 'suppression_action', 'worker_job', 'worker', 'import_row'));

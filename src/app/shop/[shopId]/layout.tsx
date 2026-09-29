@@ -21,6 +21,11 @@ export default async function ShopLayout({ children, params }: LayoutProps<"/sho
       userEmail={current.email}
     >
       {children}
+      {/* PSG controls setup (SR-01, PDF 03 §7): shops ask for changes rather than make them. */}
+      <p className="mt-10 border-t border-gray-200 pt-4 text-xs text-gray-500">
+        Need a change to your survey, branding, alert recipients or who can sign in here? Ask your PSG account contact. PSG makes the change and it is recorded in the
+        shop&apos;s history.
+      </p>
     </WorkspaceShell>
   );
 }

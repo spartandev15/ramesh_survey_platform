@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { CheckCircle2, Clock, Link2Off } from "lucide-react";
+import { env } from "@/lib/env";
 import { clientAddress } from "@/lib/rate-limit";
 import { openSurvey, RateLimitedError } from "@/modules/responses/respondent";
 import type { SurveyContext, TokenState } from "@/modules/responses/store";
@@ -78,6 +79,7 @@ function Submitted({ context, submittedAt }: { context: SurveyContext; submitted
  * ask for a new link to the address on record; the reply is the same either way (SR-22).
  */
 function Expired({ context, token }: { context: SurveyContext; token: string }) {
+  const help = env().SURVEY_HELP_EMAIL;
   return (
     <div className="flex flex-col items-center py-6 text-center">
       <Clock aria-hidden="true" className="size-12 text-amber-600" />
@@ -86,7 +88,21 @@ function Expired({ context, token }: { context: SurveyContext; token: string }) 
         You can still share your feedback with {context.shop.name}. We can email a new link to the address on file for your visit. Any answers you saved are kept.
       </p>
       <RenewalButton token={token} />
-      <p className="mt-4 max-w-md text-xs text-gray-500">If no email arrives, please contact {context.shop.name}.</p>
+      {/* The same neutral path whatever the reason (opted out, no address, not eligible): nothing is revealed (PDF 03 §3). */}
+      <p className="mt-4 max-w-md text-xs text-gray-500">
+        If no email arrives within a few minutes,{" "}
+        {help ? (
+          <>
+            write to the survey help team at{" "}
+            <a href={`mailto:${help}`} className="text-brand-navy-900 underline underline-offset-2">
+              {help}
+            </a>
+          </>
+        ) : (
+          `contact ${context.shop.name}`
+        )}
+        .
+      </p>
     </div>
   );
 }

@@ -77,6 +77,41 @@ describe.skipIf(!process.env.DATABASE_URL)("imports and invitations", async () =
     await getPool().end();
   });
 
+  it("a file that fails as a whole stages nothing and keeps its name, hash and error on record", () =>
+    inRollback(async (tx) => {
+      const { shop: s } = await productionShop(tx);
+      const content = HEADER;
+      const failure = await tx.transaction((inner) => store.createBatch(inner, actor, { shopId: s.id, kind: "visits", isTest: false, sourceSystem: "shop_documents", fileName: "empty.csv", content })).catch((e: unknown) => e);
+      expect(failure).toBeInstanceOf(store.ImportError);
+      await store.recordRejectedFile(tx, actor, { shopId: s.id, kind: "visits", isTest: false, fileName: "empty.csv", content }, (failure as Error).message);
+      const [latest] = await store.listRejectedFiles(tx, 1);
+      expect(latest.shopName).toBe(s.name);
+      expect(latest.after).toMatchObject({ fileName: "empty.csv", error: "The file has a header row but no records.", bytes: content.length });
+      expect(latest.after.sourceHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(await intentsFor(tx, s.id)).toBe(0);
+    }));
+
+  it("loads a shop's existing opt-out list once per address, and an opted-out visit is never invited (SR-37)", () =>
+    inRollback(async (tx) => {
+      const { shop: s } = await productionShop(tx);
+      const content = ["Email", " Gone@Example.com ", "gone@example.com", "not-an-email", "", "kept@example.com"].join("\n");
+      await expect(store.createBatch(tx, actor, { shopId: s.id, kind: "opt_outs", isTest: true, sourceSystem: "shop_documents", fileName: "optouts.csv", content })).rejects.toMatchObject({ kind: "invalid" });
+      const batch = await store.createBatch(tx, actor, { shopId: s.id, kind: "opt_outs", isTest: false, sourceSystem: "shop_documents", fileName: "optouts.csv", content });
+      const preview = await store.previewBatch(tx, batch.id);
+      expect(preview.rows.map((r) => `${r.action}:${r.reasons.join(",")}`)).toEqual(["created:", "reused:EMAIL_REPEATED_IN_FILE", "rejected:EMAIL_INVALID", "created:"]);
+      const committed = await store.commitBatch(tx, actor, batch.id, batch.revision);
+      expect(committed.counts).toMatchObject({ created: 2, reused: 1, rejected: 1 });
+      const saved = await tx.select().from(shopOptOut).where(eq(shopOptOut.shopId, s.id));
+      expect(saved.map((o) => o.emailNormalized).sort()).toEqual(["gone@example.com", "kept@example.com"]);
+
+      // Loading the same list again adds nothing.
+      const again = await store.createBatch(tx, actor, { shopId: s.id, kind: "opt_outs", isTest: false, sourceSystem: "shop_documents", fileName: "optouts.csv", content });
+      expect((await store.commitBatch(tx, actor, again.id, again.revision)).counts).toMatchObject({ created: 0, reused: 3 });
+
+      await importCsv(tx, s.id, csv("R-OPT,Jo,Gone,gone@example.com,2026-10-02"));
+      expect(await intentsFor(tx, s.id)).toBe(0);
+    }));
+
   it("creates a customer, visit and one send for a new eligible record, with batch counts (AT-06)", () =>
     inRollback(async (tx) => {
       const { shop: s } = await productionShop(tx);

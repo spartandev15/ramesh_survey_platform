@@ -19,7 +19,7 @@ export async function uploadImportAction(formData: FormData): Promise<ImportActi
   if (!(file instanceof File) || file.size === 0) return { ok: false, message: "Choose a CSV file to upload." };
   if (file.size > MAX_IMPORT_BYTES) return { ok: false, message: "The file is larger than 5 MB. Split it into smaller files." };
   const requested = formData.get("kind");
-  const kind = requested === "legacy_ledger" || requested === "legacy_cases" ? requested : "visits";
+  const kind = requested === "legacy_ledger" || requested === "legacy_cases" || requested === "opt_outs" ? requested : "visits";
   try {
     const batch = await uploadImport({
       shopId: String(formData.get("shopId") ?? ""),

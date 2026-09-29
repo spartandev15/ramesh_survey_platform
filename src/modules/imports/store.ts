@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { inOrder, type Tx } from "@/db/client";
 import {
+  auditEvent,
   customer,
   emailIntent,
   importBatch,
@@ -16,12 +17,13 @@ import {
   shopOptOut,
   shopSurveySettings,
   testRecipientAllowlist,
+  user,
 } from "@/db/schema";
 import { recordAudit } from "@/modules/audit/audit";
 import { matchesTestAllowlist } from "@/modules/shops/settings-policy";
 import { CsvError, parseCsv } from "./csv";
 import { planVisitRow, type ExistingVisit, type ReasonCode, type RowPlan, type ShopFacts } from "./eligibility";
-import { guessMapping, mappingIssues, normalizeLedgerRow, normalizeLegacyCaseRow, normalizeVisitRow, type ImportKind, type Mapping, type NormalizedLegacyCase, type NormalizedVisit } from "./mapping";
+import { guessMapping, mappingIssues, normalizeLedgerRow, normalizeLegacyCaseRow, normalizeOptOutRow, normalizeVisitRow, type ImportKind, type Mapping, type NormalizedLegacyCase, type NormalizedVisit } from "./mapping";
 
 /**
  * Import persistence (SR-06..SR-10). Runs inside the caller's transaction and
@@ -59,6 +61,43 @@ function auditActor(actor: Actor) {
 
 const actorId = (actor: Actor) => (actor.type === "user" ? actor.userId : null);
 
+/** Keep a failed upload's provenance and error: file name, size, SHA-256 and why it was refused. */
+export async function recordRejectedFile(tx: Tx, actor: Actor, input: { shopId: string; kind: string; isTest: boolean; fileName: string; content: string }, error: string) {
+  const [target] = await tx.select({ id: shop.id }).from(shop).where(eq(shop.id, input.shopId));
+  if (!target) return;
+  await recordAudit(
+    {
+      ...auditActor(actor),
+      shopId: target.id,
+      action: "import.file_rejected",
+      subjectType: "shop",
+      subjectId: target.id,
+      after: {
+        kind: input.kind,
+        isTest: input.isTest,
+        fileName: input.fileName.slice(0, 200),
+        bytes: Buffer.byteLength(input.content, "utf8"),
+        sourceHash: createHash("sha256").update(input.content, "utf8").digest("hex"),
+        error,
+      },
+    },
+    tx,
+  );
+}
+
+/** The latest refused files, newest first, for the imports page. */
+export async function listRejectedFiles(tx: Tx, limit = 5) {
+  const rows = await tx
+    .select({ at: auditEvent.occurredAt, after: auditEvent.after, shopName: shop.name, actorName: user.name })
+    .from(auditEvent)
+    .leftJoin(shop, eq(shop.id, auditEvent.shopId))
+    .leftJoin(user, eq(user.id, auditEvent.actorUserId))
+    .where(eq(auditEvent.action, "import.file_rejected"))
+    .orderBy(desc(auditEvent.occurredAt), desc(auditEvent.id))
+    .limit(limit);
+  return rows.map((r) => ({ ...r, after: r.after as { fileName: string; bytes: number; sourceHash: string; error: string; isTest: boolean } }));
+}
+
 export async function createBatch(
   tx: Tx,
   actor: Actor,
@@ -69,7 +108,7 @@ export async function createBatch(
   if (!target || target.archivedAt) throw new ImportError("not_found", "Choose a shop.");
   // An internal test shop holds only test data (SR-37).
   if (target.isTestShop && !input.isTest) throw new ImportError("invalid", "An internal test shop can only receive test data.");
-  if (input.kind !== "visits" && input.isTest) throw new ImportError("invalid", "Legacy history and cases are production evidence. Import them as production data.");
+  if (input.kind !== "visits" && input.isTest) throw new ImportError("invalid", "Legacy history, cases and opt-out lists are production data. Import them as production data.");
   if (Buffer.byteLength(input.content, "utf8") > MAX_IMPORT_BYTES) throw new ImportError("invalid", "The file is larger than 5 MB. Split it into smaller files.");
 
   let table;
@@ -311,6 +350,18 @@ export async function previewBatch(tx: Tx, batchId: string) {
     return { batch, issues: mappingIssues(mapping, batch.headers, batch.kind), counts, rows: preview };
   }
 
+  if (batch.kind === "opt_outs") {
+    const optOuts = rows.map((r) => normalizeOptOutRow(r.raw as Record<string, string>, mapping));
+    const known = await existingOptOuts(tx, batch.shopId, optOuts);
+    const seen = new Set<string>();
+    const preview = rows.map((r, i) => {
+      const plan = planOptOut(optOuts[i], known, seen);
+      counts[plan.action]++;
+      return { rowNumber: r.rowNumber, raw: r.raw as Record<string, string>, action: plan.action, reasons: plan.reasons, send: false };
+    });
+    return { batch, issues: mappingIssues(mapping, batch.headers, batch.kind), counts, rows: preview };
+  }
+
   if (batch.kind === "legacy_ledger") {
     const preview = rows.map((r) => {
       const plan = planLedgerRow(normalizeLedgerRow(r.raw as Record<string, string>, mapping));
@@ -360,6 +411,22 @@ function planLegacyCase(row: NormalizedLegacyCase, existing: Map<string, { id: s
   if (known?.inHub) return { action: "reused", reasons: ["ALREADY_IN_HUB"] };
   if (known) return { action: "reused", reasons: ["UPDATED_FROM_LEGACY", ...reference] };
   return { action: "created", reasons: reference };
+}
+
+async function existingOptOuts(tx: Tx, shopId: string, rows: { emailNormalized: string | null }[]) {
+  const emails = [...new Set(rows.map((r) => r.emailNormalized).filter((e): e is string => Boolean(e)))];
+  if (emails.length === 0) return new Set<string>();
+  const found = await tx.select({ email: shopOptOut.emailNormalized }).from(shopOptOut).where(and(eq(shopOptOut.shopId, shopId), inArray(shopOptOut.emailNormalized, emails)));
+  return new Set(found.map((f) => f.email));
+}
+
+/** One opt-out row: a usable address is recorded once per shop; a repeat is kept as a duplicate. */
+function planOptOut(row: { emailRaw: string | null; emailNormalized: string | null }, known: Set<string>, seen: Set<string>): { action: RowAction; reasons: string[] } {
+  if (!row.emailNormalized) return { action: "rejected", reasons: [row.emailRaw ? "EMAIL_INVALID" : "EMAIL_MISSING"] };
+  if (known.has(row.emailNormalized)) return { action: "reused", reasons: ["ALREADY_OPTED_OUT"] };
+  if (seen.has(row.emailNormalized)) return { action: "reused", reasons: ["EMAIL_REPEATED_IN_FILE"] };
+  seen.add(row.emailNormalized);
+  return { action: "created", reasons: [] };
 }
 
 function planLedgerRow(row: ReturnType<typeof normalizeLedgerRow>): { action: RowAction; reasons: string[] } {
@@ -415,6 +482,29 @@ export async function commitBatch(tx: Tx, actor: Actor, batchId: string, expecte
         if (!inserted) plan = { action: "reused", reasons: ["DUPLICATE_CASE"] };
       } else if (plan.action === "reused" && !plan.reasons.includes("ALREADY_IN_HUB")) {
         await tx.update(legacyCase).set({ ...legacyFields, revision: sql`${legacyCase.revision} + 1`, updatedAt: now }).where(eq(legacyCase.id, existing.get(row.caseRef!)!.id));
+      }
+      counts[plan.action]++;
+      await tx.update(importRow).set({ action: plan.action, reasons: plan.reasons, processedAt: now }).where(eq(importRow.id, rows[i].id));
+    }
+    return finish(tx, actor, batch, counts, now);
+  }
+
+  if (batch.kind === "opt_outs") {
+    const issues = mappingIssues(mapping, batch.headers, batch.kind);
+    if (issues.length > 0) throw new ImportError("invalid", "Fix the column mapping before committing.", issues);
+    const optOuts = rows.map((r) => normalizeOptOutRow(r.raw as Record<string, string>, mapping));
+    const known = await existingOptOuts(tx, batch.shopId, optOuts);
+    const seen = new Set<string>();
+    for (let i = 0; i < rows.length; i++) {
+      let plan = planOptOut(optOuts[i], known, seen);
+      if (plan.action === "created") {
+        const [inserted] = await tx
+          .insert(shopOptOut)
+          .values({ shopId: batch.shopId, emailNormalized: optOuts[i].emailNormalized!, source: `import:${batch.id}`, createdAt: now })
+          .onConflictDoNothing()
+          .returning({ id: shopOptOut.id });
+        // Recorded by a customer or another import at the same moment: already opted out.
+        if (!inserted) plan = { action: "reused", reasons: ["ALREADY_OPTED_OUT"] };
       }
       counts[plan.action]++;
       await tx.update(importRow).set({ action: plan.action, reasons: plan.reasons, processedAt: now }).where(eq(importRow.id, rows[i].id));

@@ -31,6 +31,7 @@ export default async function ShopCasePage({ params }: PageProps<"/shop/[shopId]
           Read the customer&apos;s answers
         </Link>
       </p>
+      {c.status === "pending_review" && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">PSG is reviewing a corrected answer on this response. Your notes and history stay here.</p>}
 
       <section aria-labelledby="attention" className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
         <h2 id="attention" className="text-base font-semibold text-brand-navy-900">

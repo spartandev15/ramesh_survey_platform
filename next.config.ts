@@ -1,5 +1,26 @@
 import type { NextConfig } from "next";
 
+const production = process.env.NODE_ENV === "production";
+
+/**
+ * Only this app's own scripts, styles and fonts run (no third-party scripts
+ * on survey pages). Shop logos may come from any https host. Inline script
+ * and style are needed by Next.js hydration and the per-shop brand colour.
+ * Development also needs eval and the reload socket, so it stays off there.
+ */
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' https: data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join("; ");
+
 const nextConfig: NextConfig = {
   // Self-contained server bundle so the app runs in Docker on any host.
   output: "standalone",
@@ -19,6 +40,13 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "no-referrer" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
+          ...(production
+            ? [
+                { key: "Content-Security-Policy", value: contentSecurityPolicy },
+                // Browsers ignore this over plain http, so it is safe on a local production build too.
+                { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+              ]
+            : []),
         ],
       },
       {

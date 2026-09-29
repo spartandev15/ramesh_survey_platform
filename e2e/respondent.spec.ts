@@ -15,7 +15,14 @@ test("respondent can resume, is guided through errors, and submits exactly once"
   const url = await createTestLink(page);
 
   const phone = await respondentPhone(browser);
-  await phone.goto(url);
+  // Submitting from a later page first reviews every page: an unanswered required question on page 1 is shown there (PDF 03 §3).
+  await phone.goto(`${url}?step=2`);
+  // The rating inputs are visually hidden behind their labels.
+  await phone.locator('input[name="survey-recommend_score"]').first().check({ force: true });
+  await phone.getByRole("button", { name: "Submit survey" }).click();
+  await expect(phone.getByRole("alert").filter({ hasText: "Please check" })).toBeFocused();
+  await expect(phone).toHaveURL(/\?step=1$/);
+  await expect(phone.getByLabel("No", { exact: true })).toBeVisible();
 
   // Answer page 1; the follow-up appears only for "No"
   await phone.locator("label", { hasText: /^4$/ }).first().click();
@@ -27,21 +34,29 @@ test("respondent can resume, is guided through errors, and submits exactly once"
   }
   await expect(phone.locator('[role="status"]', { hasText: /Saved [0-9]/ })).toBeVisible();
 
+  // A save that fails is shown, and is retried by itself without losing the newer answer (AT-16).
+  await phone.route("**/survey/**", (route) => (route.request().method() === "POST" ? route.abort() : route.continue()));
+  await phone.getByRole("group", { name: "Quality of the repair" }).getByLabel("Fair").check();
+  await expect(phone.locator('[role="status"]', { hasText: /could not be saved/ })).toBeVisible();
+  await phone.unroute("**/survey/**");
+  await expect(phone.locator('[role="status"]', { hasText: /Saved [0-9]/ })).toBeVisible({ timeout: 15_000 });
+
   // Resume with the same link (SR-16)
   await phone.reload();
   await expect(phone.getByLabel(/What happened with the timing/)).toHaveValue("One day late");
+  await expect(phone.getByRole("group", { name: "Quality of the repair" }).getByLabel("Fair")).toBeChecked();
 
-  // Next and Back keep answers
+  // Next and Back keep answers, and so do the browser's Back and Forward
   await phone.getByRole("button", { name: "Next", exact: true }).click();
   await phone.getByRole("button", { name: "Back", exact: true }).click();
   await expect(phone.getByLabel("No", { exact: true })).toBeChecked();
   await phone.getByRole("button", { name: "Next", exact: true }).click();
+  await phone.goBack();
+  await expect(phone.getByLabel("No", { exact: true })).toBeChecked();
+  await phone.goForward();
+  await expect(phone.locator('input[name="survey-recommend_score"]').first()).toBeVisible();
 
-  // A missing required answer is explained and focused (SR-39)
-  await phone.getByRole("button", { name: "Submit survey" }).click();
-  const summary = phone.getByRole("alert").filter({ hasText: "Please check" });
-  await expect(summary).toBeFocused();
-
+  // (A missing required answer being explained and focused, SR-39, is checked at the start.)
   // Keyboard selects a rating
   await phone.locator('input[name="survey-recommend_score"]').first().focus();
   await phone.keyboard.press("ArrowRight");

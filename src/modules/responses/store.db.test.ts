@@ -95,6 +95,10 @@ describe.skipIf(!process.env.DATABASE_URL)("respondent survey lifecycle", async 
 
       const state = await store.getTokenState(tx, token);
       expect(state).toMatchObject({ state: "open", revision: 2, answers: { overall_rating: 5, ready_on_time: "yes" } });
+
+      // The older tab cannot submit its answers over the newer draft either; the current tab can.
+      expect(await store.submitResponse(tx, token, "key-stale-01", complete, new Date(), 1)).toEqual({ ok: false, reason: "stale" });
+      expect(await store.submitResponse(tx, token, "key-fresh-01", complete, new Date(), 2)).toMatchObject({ ok: true, replayed: false });
     }));
 
   it("rejects invalid draft answers instead of storing them", () =>

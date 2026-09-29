@@ -3,7 +3,8 @@ import { getDb } from "@/db/client";
 import { pageOf } from "@/lib/pagination";
 import { requireShopRead } from "@/modules/access/principal";
 import { formatAnswer } from "@/modules/instruments/describe";
-import { CATEGORY_LABELS, categorize, localDate, summarize, type Category, type DashboardFilters } from "./cohort";
+import { recordAudit } from "@/modules/audit/audit";
+import { CATEGORY_LABELS, DATE_BASIS_LABELS, SOURCE_FILTER_LABELS, categorize, localDate, parseFilters, summarize, type Category, type DashboardFilters } from "./cohort";
 import { toCsv } from "@/lib/csv";
 import * as store from "./store";
 
@@ -70,12 +71,15 @@ export async function getDashboard(shopId: string, filters: DashboardFilters, pa
 /**
  * The same cohort as the dashboard, one row per submitted response, with a
  * column saying whether it counts. Answers export under stable question ids.
+ * Default dates use the shop's own calendar, as on screen; every row names the
+ * date basis and filters it came from (SR-31), and each export is audited.
  */
-export async function exportCsv(shopId: string, filters: DashboardFilters) {
-  await requireShopRead(shopId);
+export async function exportCsv(shopId: string, params: Record<string, string>, now = new Date()) {
+  const current = await requireShopRead(shopId);
   return getDb().transaction(async (tx) => {
     const shop = await store.shopForDashboard(tx, shopId);
     if (!shop) return null;
+    const filters = parseFilters(params, localDate(now, shop.timezone));
     const rows = await store.cohortRows(tx, shopId, filters, shop.timezone);
     const versions = await store.versionDetails(tx, [...new Set(rows.map((r) => r.versionId))]);
 
@@ -97,7 +101,14 @@ export async function exportCsv(shopId: string, filters: DashboardFilters) {
       ...metricIds.map((id) => `metric:${id}`),
       "alerts",
       ...questions.map((q) => `answer:${q.id}`),
+      "report_date_basis",
+      "report_from",
+      "report_to",
+      "report_source",
+      "report_version",
     ];
+    const versionFilter = filters.version === "all" ? "All versions" : ((await store.versionDetails(tx, [filters.version])).get(filters.version)?.label ?? filters.version);
+    const report = [DATE_BASIS_LABELS[filters.basis], filters.from, filters.to, SOURCE_FILTER_LABELS[filters.source], versionFilter];
     const body = rows.map((r) => {
       const category = categorize(r, shop.isTestShop);
       return [
@@ -113,8 +124,13 @@ export async function exportCsv(shopId: string, filters: DashboardFilters) {
         ...metricIds.map((id) => r.metrics[id] ?? ""),
         r.alerts.map((a) => a.label).join("; "),
         ...questions.map((q) => formatAnswer(q, r.answers[q.id]) ?? ""),
+        ...report,
       ];
     });
+    await recordAudit(
+      { actorType: "user", actorUserId: current.principal.userId, shopId, action: "survey_results.exported", subjectType: "shop", subjectId: shopId, after: { ...filters, rows: rows.length } },
+      tx,
+    );
     const name = `${shop.name.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "shop"}-survey-results-${filters.from}-to-${filters.to}.csv`;
     return { csv: toCsv(header, body), fileName: name, rows: rows.length };
   });

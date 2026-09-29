@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Download } from "lucide-react";
 import Link from "next/link";
 import { Pagination } from "@/components/pagination";
 import { pageNumber, pageOf } from "@/lib/pagination";
@@ -24,10 +25,20 @@ export default async function ReadinessPage({ searchParams }: PageProps<"/psg/re
 
   return (
     <div className="max-w-6xl">
-      <h1 className="text-2xl font-semibold text-brand-navy-900">Launch readiness</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-brand-navy-900">Launch readiness</h1>
+        {/* The whole manifest, every shop and check, to keep as launch evidence (WP-11). */}
+        <a
+          href="/psg/readiness/export"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+        >
+          <Download className="size-4" aria-hidden="true" />
+          Export CSV
+        </a>
+      </div>
       <p className="mt-1 max-w-3xl text-sm text-gray-600">
-        Every shop in scope, with what is still missing before it can go Live. Checks from the shop&apos;s settings update by themselves; the others are confirmed by a PSG admin with a note. Being
-        ready does not switch a shop to Live: that stays a deliberate step on the shop&apos;s page.
+        Every shop in scope, with what is still missing before it can go Live. Checks from the shop&apos;s settings update by themselves; the others are confirmed by a PSG admin with a note. A
+        shop&apos;s first switch to Live needs every check; it stays a deliberate step on the shop&apos;s page.
       </p>
       <p className="mt-3 text-sm text-gray-900">
         <span className="font-semibold">

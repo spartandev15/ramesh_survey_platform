@@ -86,6 +86,9 @@ test("a shop user sees their own results immediately and nothing from other shop
   const csv = await (await shopPage.request.get(exportHref!)).text();
   const lines = csv.trim().split(/\r\n/);
   expect(lines[0]).toContain('"response_id"');
+  // Every row says which date basis and filters it came from (SR-31).
+  expect(lines[0]).toContain('"report_date_basis","report_from","report_to","report_source","report_version"');
+  if (lines.length > 1) expect(lines[1]).toContain('"Date submitted"');
   expect(lines.length - 1).toBe(submittedBefore + 1);
   expect(lines.filter((l) => l.includes('"Counted","yes"')).length).toBe(countedBefore);
 

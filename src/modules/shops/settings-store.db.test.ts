@@ -166,6 +166,12 @@ describe.skipIf(!process.env.DATABASE_URL)("shop survey settings", async () => {
       expect(view?.settings.instrumentVersionId).toBe(v1.id);
       const [kept] = await tx.select().from(invitation).where(eq(invitation.id, issued.invitationId));
       expect(kept.instrumentVersionId).toBe(v2.id);
+      // The customer's existing link still renders and scores the version it was issued with (AT-15).
+      const opened = await responses.getTokenState(tx, issued.token);
+      expect(opened.state).toBe("open");
+      if (opened.state !== "open") return;
+      expect(opened.context.version.id).toBe(v2.id);
+      expect(opened.context.version.definitionHash).toBe(v2.definitionHash);
     }));
 
   it("a Live shop cannot drop its cutoff or switch to a TEST version", () =>

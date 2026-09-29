@@ -18,7 +18,8 @@ export type StopReason =
   | "INITIAL_NOT_ACCEPTED"
   | "LINK_EXPIRED"
   | "OVERDUE_AFTER_PAUSE"
-  | "NOT_IMPORTED";
+  | "NOT_IMPORTED"
+  | "SHOP_ARCHIVED";
 
 export const STOP_LABELS: Record<string, string> = {
   SUBMITTED: "Survey already submitted",
@@ -26,6 +27,7 @@ export const STOP_LABELS: Record<string, string> = {
   LINK_EXPIRED: "Survey link has expired",
   OVERDUE_AFTER_PAUSE: "Became due while the shop was paused: needs PSG review",
   NOT_IMPORTED: "Not an imported visit",
+  SHOP_ARCHIVED: "The shop was deleted (archived)",
 };
 
 export interface DispatchFacts {

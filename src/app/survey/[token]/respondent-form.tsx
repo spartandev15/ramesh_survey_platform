@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle, Check, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QuestionField } from "@/components/survey/question-field";
 import type { InstrumentDefinition } from "@/modules/instruments/definition";
@@ -35,7 +35,10 @@ interface RespondentFormProps {
 export function RespondentForm({ token, definition, initialAnswers, initialRevision, initialSavedAt }: RespondentFormProps) {
   const router = useRouter();
   const [answers, setAnswers] = useState<Answers>(initialAnswers);
-  const [pageIndex, setPageIndex] = useState(0);
+  // The page is in the URL (?step=2), so the browser's Back and Forward move between survey pages.
+  const searchParams = useSearchParams();
+  const pageIndex = Math.max(0, (Number.parseInt(searchParams.get("step") ?? "1", 10) || 1) - 1);
+  const setPageIndex = (index: number) => window.history.pushState(null, "", `?step=${index + 1}`);
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
   const [status, setStatus] = useState<SaveStatus>(initialSavedAt ? { kind: "saved", at: new Date(initialSavedAt) } : { kind: "idle" });
   const [submitting, setSubmitting] = useState(false);
@@ -174,15 +177,33 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
     const ids = new Set(current.page.questions.filter((q) => visible.has(q.id)).map((q) => q.id));
     const problems = pageErrors(ids);
     if (problems.size > 0) return showErrors(problems);
+    // Review every page before sending: a required answer left on an earlier page is shown there (PDF 03 §3).
+    const missed = pageErrors(visible);
+    if (missed.size > 0) {
+      const target = pages.findIndex(({ page }) => page.questions.some((q) => missed.has(q.id)));
+      if (target >= 0 && target !== position) {
+        setPageIndex(target);
+        requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+      }
+      const onTarget = new Set(target >= 0 ? pages[target].page.questions.map((q) => q.id) : []);
+      return showErrors(new Map([...missed].filter(([id]) => onTarget.has(id))));
+    }
 
     setSubmitting(true);
     setSubmitError(null);
     if (timer.current) clearTimeout(timer.current);
     try {
-      const result = await submitAction({ token, requestKey: requestKey.current, answers: latest.current });
+      // Let an autosave already in flight finish, so its revision is the one we send.
+      for (let waited = 0; saving.current && waited < 5000; waited += 100) await new Promise((r) => setTimeout(r, 100));
+      const result = await submitAction({ token, requestKey: requestKey.current, expectedRevision: revision.current, answers: latest.current });
       if (result.ok || result.reason === "already_submitted" || result.reason === "expired") {
         dirty.current = false;
         router.refresh();
+        return;
+      }
+      if (result.reason === "stale") {
+        setStatus({ kind: "failed", message: "This survey was updated in another window.", reload: true });
+        setSubmitError("Your answers were changed in another window. Reload the page to see the latest answers before you submit.");
         return;
       }
       if (result.reason === "invalid" && result.errors?.length) {

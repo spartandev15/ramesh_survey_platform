@@ -45,6 +45,9 @@ test("PSG configures a shop and cannot go Live without verified content", async 
   // A TEST version never reaches Live customers (AT-14).
   await page.getByRole("button", { name: "Switch to Live" }).click();
   await expect(page.getByText(/assigned version is a TEST version/)).toBeVisible();
+  // The first Live also needs the whole launch checklist, acceptance last (SR-37).
+  await expect(page.getByText("Launch checklist: Internal test passed")).toBeVisible();
+  await expect(page.getByText("Launch checklist: PSG accepted for launch")).toBeVisible();
 
   // Invalid input is explained next to the field and nothing is saved.
   await page.getByLabel("Approved logo link").fill("http://insecure.example/logo.png");

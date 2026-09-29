@@ -26,13 +26,13 @@ export async function saveDraftAction(input: { token: string; expectedRevision: 
 
 export type SubmitActionResult =
   | { ok: true; submittedAt: string }
-  | { ok: false; reason: "invalid" | "expired" | "already_submitted" | "rate_limited"; errors?: AnswerError[] };
+  | { ok: false; reason: "invalid" | "expired" | "already_submitted" | "stale" | "rate_limited"; errors?: AnswerError[] };
 
 /** Scores and alerts are computed on the server and never returned to the respondent. */
-export async function submitAction(input: { token: string; requestKey: string; answers: Answers }): Promise<SubmitActionResult> {
+export async function submitAction(input: { token: string; requestKey: string; expectedRevision: number; answers: Answers }): Promise<SubmitActionResult> {
   const address = clientAddress(await headers());
   try {
-    const result = await submitSurvey(input.token, address, input.requestKey, input.answers);
+    const result = await submitSurvey(input.token, address, input.requestKey, input.answers, input.expectedRevision);
     if (!result.ok) return { ok: false, reason: result.reason, errors: result.errors };
     return { ok: true, submittedAt: result.submittedAt.toISOString() };
   } catch (error) {

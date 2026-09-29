@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAccessError } from "@/modules/access/errors";
-import { assignOperatorOwner, reviewWorkerFailure } from "@/modules/operations/operations";
+import { assignOperatorOwner, reviewOperatorItem } from "@/modules/operations/operations";
 import { OperationsError } from "@/modules/operations/store";
 
 export type OperationsActionResult = { ok: true } | { ok: false; message: string };
@@ -24,6 +24,6 @@ export async function assignOwnerAction(subjectType: string, subjectId: string, 
   return run(() => assignOperatorOwner(subjectType, subjectId, ownerUserId, revision), "You do not have permission to assign operator items.");
 }
 
-export async function reviewFailureAction(jobId: string, revision: number, note: string) {
-  return run(() => reviewWorkerFailure(jobId, revision, note), "You do not have permission to review worker failures.");
+export async function reviewItemAction(subjectType: string, subjectId: string, revision: number, note: string) {
+  return run(() => reviewOperatorItem(subjectType, subjectId, revision, note), "You do not have permission to mark operator items reviewed.");
 }

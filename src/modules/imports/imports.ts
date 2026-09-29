@@ -16,7 +16,19 @@ function requireId(id: string) {
 export async function uploadImport(input: { shopId: string; kind: ImportKind; isTest: boolean; sourceSystem: string; fileName: string; content: string }) {
   const { principal } = await requireCapability("import.manage");
   if (!UUID_RE.test(input.shopId)) throw new store.ImportError("not_found", "Choose a shop.");
-  return getDb().transaction((tx) => store.createBatch(tx, { type: "user", userId: principal.userId }, input));
+  const actor = { type: "user" as const, userId: principal.userId };
+  try {
+    return await getDb().transaction((tx) => store.createBatch(tx, actor, input));
+  } catch (error) {
+    // A file that fails as a whole is kept on record with its error; nothing from it is staged or sent (PDF 03 §2).
+    if (error instanceof store.ImportError && error.kind === "invalid") await getDb().transaction((tx) => store.recordRejectedFile(tx, actor, input, error.message));
+    throw error;
+  }
+}
+
+export async function listRejectedFiles() {
+  await requireCapability("psg.workspace");
+  return getDb().transaction((tx) => store.listRejectedFiles(tx));
 }
 
 export async function listImports(page: number) {

@@ -13,7 +13,7 @@ try {
 
 describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async () => {
   const { getDb, getPool } = await import("@/db/client");
-  const { auditEvent, emailIntent, invitation, matchDecision, repairVisit, responseRevision, shop, shopSuggestion, shopSurveySettings, surveyResponse } = await import("@/db/schema");
+  const { alertCase, auditEvent, emailIntent, invitation, matchDecision, repairVisit, responseRevision, shop, shopSuggestion, shopSurveySettings, surveyResponse } = await import("@/db/schema");
   const instruments = await import("@/modules/instruments/store");
   const { demoDefinition } = await import("@/modules/instruments/demo-definition");
   const settings = await import("@/modules/shops/settings-store");
@@ -22,6 +22,7 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
   const invitations = await import("@/modules/invitations/store");
   const responses = await import("./store");
   const staff = await import("./staff-store");
+  const dashboard = await import("@/modules/dashboard/store");
   type Tx = import("@/db/client").Tx;
 
   const actor = { type: "system" } as const;
@@ -98,6 +99,8 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
       // The paper response stops the visit's pending reminder and initial send.
       const replay = await staff.submitPaper(tx, actor, { shopId: s.id, visitId: visit("P1").id, receivedOn: "2026-09-20", answers: complete, requestKey: row.submitRequestKey! });
       expect(replay).toEqual({ responseId: paper.responseId, replayed: true });
+      // The same key with different answers is refused, never saved as a second entry.
+      await expect(staff.submitPaper(tx, actor, { shopId: s.id, visitId: visit("P1").id, receivedOn: "2026-09-20", answers: happy, requestKey: row.submitRequestKey! })).rejects.toMatchObject({ kind: "conflict" });
     }));
 
   it("the first submission for a visit counts; a later one waits for duplicate review (AT-19)", () =>
@@ -146,6 +149,27 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
     expect(all).toHaveLength(2);
     expect(all.filter((r) => r.canonical)).toHaveLength(1);
     expect(all.filter((r) => r.matchStatus === "duplicate_review")).toHaveLength(1);
+  });
+
+  it("a double-clicked public submit saves one response and one alert case, even when both requests run at once", async () => {
+    // Needs two real transactions, so it commits test-only data in an internal test shop.
+    const setup = await getDb().transaction(async (tx) => {
+      const [s] = await tx.insert(shop).values({ name: "E2E Public Race (internal test)", publicSlug: `pubrace-${unique().replace("_", "-")}`, isTestShop: true }).returning();
+      await settings.insertDefaultSettings(tx, s.id);
+      const { draft } = await instruments.insertInstrument(tx, actor, { key: `pubrace_${unique()}`, name: "Demo" }, demoDefinition);
+      const version = await instruments.publishVersion(tx, actor, draft.id, draft.revision, { isTest: true });
+      await tx.update(shopSurveySettings).set({ instrumentVersionId: version.id }).where(eq(shopSurveySettings.shopId, s.id));
+      return { shopId: s.id, slug: s.publicSlug!, versionId: version.id };
+    });
+    const key = `k-${unique()}`;
+    const submit = () => getDb().transaction((tx) => staff.submitPublic(tx, { slug: setup.slug, versionId: setup.versionId, answers: complete, context: {}, requestKey: key }));
+    const results = await Promise.all([submit(), submit()]);
+    expect(results.map((r) => r.ok)).toEqual([true, true]);
+    expect(results.filter((r) => "replayed" in r && r.replayed)).toHaveLength(1);
+    const saved = await getDb().select().from(surveyResponse).where(eq(surveyResponse.shopId, setup.shopId));
+    expect(saved).toHaveLength(1);
+    const cases = await getDb().select().from(alertCase).where(eq(alertCase.responseId, saved[0].id));
+    expect(cases).toHaveLength(1);
   });
 
   it("a public response keeps its shop, is saved unmatched and uncounted, then counts exactly once when matched (AT-13, AT-28)", () =>
@@ -199,9 +223,34 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
       const full = await staff.getFullResponse(tx, orphan.id);
       expect(full?.suggestions).toEqual([{ shopId: s.id, shopName: "Match Shop", evidence: "Legacy company name 'Match Shop' (source id 1042)" }]);
       expect(full?.response.shopId).toBeNull();
+      // The suggested shop sees nothing of it before confirmation: not on its dashboard, not by id.
+      const window = { from: "2000-01-01", to: "2100-01-01", basis: "submitted", source: "all", version: "all" } as const;
+      expect((await dashboard.cohortRows(tx, s.id, window, "America/Chicago")).some((r) => r.id === orphan.id)).toBe(false);
+      expect(await dashboard.shopResponse(tx, s.id, orphan.id, false)).toBeNull();
 
-      await staff.confirmShop(tx, actor, orphan.id, orphan.matchRevision, s.id, "Company name and source id match");
+      // Checked but still unmatched: recorded with a note, nothing else changes.
+      await expect(staff.recordUnresolved(tx, actor, orphan.id, orphan.matchRevision, "no")).rejects.toMatchObject({ kind: "invalid" });
+      await staff.recordUnresolved(tx, actor, orphan.id, orphan.matchRevision, "Searched legacy ids 1040-1045, no match");
+      const checked = await responseRow(tx, orphan.id);
+      expect(checked).toMatchObject({ shopId: null, matchStatus: "shop_unconfirmed", matchRevision: orphan.matchRevision + 1 });
+      const [unresolved] = await tx.select().from(matchDecision).where(and(eq(matchDecision.responseId, orphan.id), eq(matchDecision.kind, "unresolved")));
+      expect(unresolved.evidence).toBe("Searched legacy ids 1040-1045, no match");
+
+      await staff.confirmShop(tx, actor, orphan.id, checked.matchRevision, s.id, "Company name and source id match");
       expect(await responseRow(tx, orphan.id)).toMatchObject({ shopId: s.id, matchStatus: "visit_unmatched", canonical: false });
+    }));
+
+  it("keeping the counted response settles a duplicate without changing what counts", () =>
+    inRollback(async (tx) => {
+      const { shop: s, visit } = await shopWithVisits(tx, ["K1,Jo,Smith,jo@example.com"]);
+      const first = await staff.submitPaper(tx, actor, { shopId: s.id, visitId: visit("K1").id, receivedOn: "2026-09-20", answers: complete, requestKey: `k-${unique()}` });
+      const second = await staff.submitPaper(tx, actor, { shopId: s.id, visitId: visit("K1").id, receivedOn: "2026-09-21", answers: happy, requestKey: `k-${unique()}` });
+      const dup = await responseRow(tx, second.responseId);
+      expect(dup.matchStatus).toBe("duplicate_review");
+      await staff.resolveDuplicate(tx, actor, second.responseId, dup.matchRevision, "keep_original", "Second form is a photocopy of the first");
+      expect((await countedFor(tx, visit("K1").id)).map((r) => r.id)).toEqual([first.responseId]);
+      expect(await responseRow(tx, second.responseId)).toMatchObject({ canonical: false, matchStatus: "matched", duplicateDisposition: "kept_original" });
+      await expect(staff.resolveDuplicate(tx, actor, second.responseId, dup.matchRevision, "promote", "Changed my mind")).rejects.toMatchObject({ kind: "conflict" });
     }));
 
   it("a legacy-surveyed visit keeps a matched response only as a reference", () =>

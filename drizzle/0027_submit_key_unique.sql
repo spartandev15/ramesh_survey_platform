@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "survey_response_submit_key_unique" ON "survey_response" USING btree ("source","submit_request_key") WHERE "survey_response"."submit_request_key" IS NOT NULL;

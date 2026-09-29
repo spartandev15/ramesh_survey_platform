@@ -29,8 +29,9 @@ export async function assignOperatorOwner(subjectType: string, subjectId: string
   return getDb().transaction((tx) => store.assignOwner(tx, { type: "user", userId: principal.userId }, subjectType, subjectId.slice(0, 64), ownerUserId || null, expectedRevision));
 }
 
-export async function reviewWorkerFailure(jobId: string, expectedRevision: number, note: string) {
+/** Mark a failed job or an import row reviewed, with what was done. */
+export async function reviewOperatorItem(subjectType: string, subjectId: string, expectedRevision: number, note: string) {
   const { principal } = await requireCapability("operations.manage");
   if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new store.OperationsError("invalid", "Reload the page and try again.");
-  return getDb().transaction((tx) => store.reviewWorkerFailure(tx, { type: "user", userId: principal.userId }, jobId.slice(0, 64), expectedRevision, note.slice(0, 2000)));
+  return getDb().transaction((tx) => store.reviewItem(tx, { type: "user", userId: principal.userId }, subjectType, subjectId.slice(0, 64), expectedRevision, note.slice(0, 2000)));
 }

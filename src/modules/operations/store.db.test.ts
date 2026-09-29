@@ -98,6 +98,27 @@ describe.skipIf(!process.env.DATABASE_URL)("operator queues", async () => {
       expect(item?.provenance).toBe("Imported from ops.csv, row 1");
     }));
 
+  it("a file row that never became a visit is queued with an owner until someone records what they did (AT-07)", () =>
+    inRollback(async (tx) => {
+      const s = await liveShop(tx, ["OK1,Lee,lee@example.com,2026-10-02", ",Smith,smith@example.com,2026-10-02"]);
+      const rows = (await ops.listOperatorItems(tx)).filter((i) => i.subjectType === "import_row" && i.shopId === s.id);
+      expect(rows).toHaveLength(1);
+      const [row] = rows;
+      expect(row).toMatchObject({ kind: "held_import", owner: null, revision: 0, title: "Held row 2 · ops.csv" });
+      expect(row.reason).toContain("Visit identity unclear");
+      expect(row.href).toMatch(/^\/psg\/imports\/[0-9a-f-]{36}$/);
+
+      const operator = await staffUser(tx);
+      const owned = await ops.assignOwner(tx, operator, "import_row", row.subjectId, operator.userId, 0);
+      await expect(ops.reviewItem(tx, operator, "import_row", row.subjectId, owned.revision, "ok")).rejects.toMatchObject({ kind: "invalid" });
+      await expect(ops.reviewItem(tx, operator, "invitation", row.subjectId, owned.revision, "Fixed it in the source")).rejects.toMatchObject({ kind: "invalid" });
+      await ops.reviewItem(tx, operator, "import_row", row.subjectId, owned.revision, "Shop sent the RO; it comes in the next file");
+      expect((await ops.listOperatorItems(tx)).some((i) => i.subjectType === "import_row" && i.subjectId === row.subjectId)).toBe(false);
+      const history = await tx.select().from(auditEvent).where(and(eq(auditEvent.subjectType, "import_row"), eq(auditEvent.subjectId, row.subjectId)));
+      expect(history.map((h) => h.action).sort()).toEqual(["operator.owner_assigned", "operator.row_reviewed"]);
+      expect(history.every((h) => h.shopId === s.id)).toBe(true);
+    }));
+
   it("a failed email appears with its error, can be retried, and keeps the original error in history (AT-38)", () =>
     inRollback(async (tx) => {
       const s = await liveShop(tx, ["F1,Smith,f1@example.com,2026-09-10"]);
@@ -222,10 +243,10 @@ describe.skipIf(!process.env.DATABASE_URL)("operator queues", async () => {
       expect(JSON.stringify(item)).not.toContain("secret stack");
 
       const operator = await staffUser(tx);
-      await expect(ops.reviewWorkerFailure(tx, operator, job.id, 0, "ok")).rejects.toMatchObject({ kind: "invalid" });
-      await ops.reviewWorkerFailure(tx, operator, job.id, 0, "Database restarted; next cycle ran fine");
+      await expect(ops.reviewItem(tx, operator, "worker_job", job.id, 0, "ok")).rejects.toMatchObject({ kind: "invalid" });
+      await ops.reviewItem(tx, operator, "worker_job", job.id, 0, "Database restarted; next cycle ran fine");
       expect(await itemFor(tx, job.id)).toBeUndefined();
-      await expect(ops.reviewWorkerFailure(tx, operator, job.id, 1, "Again, twice")).rejects.toMatchObject({ kind: "conflict" });
+      await expect(ops.reviewItem(tx, operator, "worker_job", job.id, 1, "Again, twice")).rejects.toMatchObject({ kind: "conflict" });
       const [audit] = await tx.select().from(auditEvent).where(and(eq(auditEvent.subjectType, "worker_job"), eq(auditEvent.subjectId, job.id)));
       expect(audit).toMatchObject({ action: "operator.failure_reviewed", actorUserId: operator.userId });
     }));

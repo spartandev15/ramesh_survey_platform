@@ -248,6 +248,15 @@ describe.skipIf(!process.env.DATABASE_URL)("email ledger", async () => {
       expect((await tx.select({ n: count() }).from(shopOptOut).where(eq(shopOptOut.shopId, a.shop.id)))[0].n).toBe(1);
     }));
 
+  it("an archived shop sends nothing more, whatever was already queued", () =>
+    inRollback(async (tx) => {
+      const { shop: s, intent } = await liveShopWithInvitation(tx);
+      await tx.update(shop).set({ archivedAt: T0 }).where(eq(shop.id, s.id));
+      const provider = new FakeProvider();
+      expect(await dispatch(tx, provider, T0, [intent.id])).toEqual({ sent: 0, stopped: ["cancelled:SHOP_ARCHIVED"] });
+      expect(provider.sent).toHaveLength(0);
+    }));
+
   it("a shop paused before dispatch sends nothing; existing surveys still submit; resume does not bulk-send (AT-26)", () =>
     inRollback(async (tx) => {
       const { shop: s, intent, invitation: inv, revision } = await liveShopWithInvitation(tx);

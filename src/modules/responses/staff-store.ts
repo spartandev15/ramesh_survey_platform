@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import {
   customer,
@@ -61,6 +61,12 @@ async function loadVersion(tx: Tx, versionId: string, additionVersionId: string 
   }
 }
 
+/**
+ * Serialize concurrent requests with the same submit key (double click, retry)
+ * so the replay check below sees the first insert; the unique index is the backstop.
+ */
+const lockRequestKey = (tx: Tx, source: "paper" | "public", key: string) => tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`submit:${source}:${key}`}, 0))`);
+
 /** Whether a shop's new responses are test data: internal shops, Test mode, or a TEST version (SR-03). */
 async function shopContext(tx: Tx, shopId: string) {
   const [row] = await tx.select({ shop, settings: shopSurveySettings }).from(shop).innerJoin(shopSurveySettings, eq(shopSurveySettings.shopId, shop.id)).where(eq(shop.id, shopId));
@@ -89,18 +95,20 @@ export async function submitPaper(tx: Tx, actor: Actor, input: PaperInput, now =
   if (!isIsoDate(input.receivedOn)) throw new StaffResponseError("invalid", "Enter the date the paper form was received.");
   if (input.receivedOn > now.toISOString().slice(0, 10)) throw new StaffResponseError("invalid", "The received date cannot be in the future.");
 
-  // Same request key from the same person replays the original entry (double click, retry).
+  // Same request key from the same person replays the original entry (double click, retry);
+  // the same key with different answers is refused (PDF 05: same key, different body).
+  await lockRequestKey(tx, "paper", input.requestKey);
   const [replay] = await tx
-    .select({ id: surveyResponse.id })
+    .select({ id: surveyResponse.id, hash: surveyResponse.submitPayloadHash, versionId: surveyResponse.instrumentVersionId, additionVersionId: surveyResponse.additionVersionId, enteredBy: surveyResponse.enteredBy })
     .from(surveyResponse)
-    .where(
-      and(
-        eq(surveyResponse.source, "paper"),
-        eq(surveyResponse.submitRequestKey, input.requestKey),
-        actor.type === "user" ? eq(surveyResponse.enteredBy, actor.userId) : isNull(surveyResponse.enteredBy),
-      ),
-    );
-  if (replay) return { responseId: replay.id, replayed: true };
+    .where(and(eq(surveyResponse.source, "paper"), eq(surveyResponse.submitRequestKey, input.requestKey)));
+  if (replay) {
+    const { definition } = await loadVersion(tx, replay.versionId, replay.additionVersionId);
+    const again = evaluateSubmission(definition, input.answers);
+    const same = replay.enteredBy === actorId(actor) && again.ok && definitionHash(again.answers) === replay.hash;
+    if (!same) throw new StaffResponseError("conflict", "This paper form was already saved with different answers. Reload the page to enter a new one.");
+    return { responseId: replay.id, replayed: true };
+  }
 
   const ctx = await shopContext(tx, input.shopId);
   let versionId: string | null = ctx.settings.instrumentVersionId;
@@ -220,15 +228,16 @@ export async function submitPublic(tx: Tx, input: { slug: string; versionId: str
   // The survey changed while the respondent was answering: they reload rather than submit to the wrong questions.
   if (form.versionId !== input.versionId || form.additionVersionId !== (input.additionVersionId ?? null)) return { ok: false as const, reason: "changed" as const };
 
+  await lockRequestKey(tx, "public", input.requestKey);
   const [replay] = await tx
-    .select({ id: surveyResponse.id, hash: surveyResponse.submitPayloadHash })
+    .select({ id: surveyResponse.id, hash: surveyResponse.submitPayloadHash, shopId: surveyResponse.shopId })
     .from(surveyResponse)
-    .where(and(eq(surveyResponse.source, "public"), eq(surveyResponse.shopId, form.shop.id), eq(surveyResponse.submitRequestKey, input.requestKey)));
+    .where(and(eq(surveyResponse.source, "public"), eq(surveyResponse.submitRequestKey, input.requestKey)));
 
   const evaluated = evaluateSubmission(form.definition, input.answers);
   if (!evaluated.ok) return { ok: false as const, reason: "invalid" as const, errors: evaluated.errors };
   const payloadHash = definitionHash(evaluated.answers);
-  if (replay) return replay.hash === payloadHash ? { ok: true as const, replayed: true } : { ok: false as const, reason: "already_submitted" as const };
+  if (replay) return replay.shopId === form.shop.id && replay.hash === payloadHash ? { ok: true as const, replayed: true } : { ok: false as const, reason: "already_submitted" as const };
 
   const [created] = await tx
     .insert(surveyResponse)

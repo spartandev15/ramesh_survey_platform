@@ -4,7 +4,7 @@ import { hasCapability } from "@/modules/access/capabilities";
 import { Pagination } from "@/components/pagination";
 import { pageNumber } from "@/lib/pagination";
 import { pageRequireCapability } from "@/modules/access/page-guards";
-import { listImports } from "@/modules/imports/imports";
+import { listImports, listRejectedFiles } from "@/modules/imports/imports";
 import { SOURCE_SYSTEMS, type BatchCounts } from "@/modules/imports/store";
 import { listVisibleShops } from "@/modules/shops/shops";
 import { UploadForm } from "./upload-form";
@@ -17,6 +17,8 @@ const dateTime = new Intl.DateTimeFormat("en-US", {
   timeStyle: "short",
 });
 
+const KIND_NAMES: Record<string, string> = { visits: "Repair visits", legacy_ledger: "Legacy history", legacy_cases: "Legacy cases", opt_outs: "Opt-out list" };
+
 function summary(counts: BatchCounts | null) {
   if (!counts) return "Not committed";
   return `${counts.created} created · ${counts.reused} duplicate · ${counts.held} held · ${counts.excluded} excluded · ${counts.rejected} failed`;
@@ -26,7 +28,7 @@ export default async function ImportsPage({ searchParams }: PageProps<"/psg/impo
   const current = await pageRequireCapability("psg.workspace");
   const canImport = hasCapability(current.principal, "import.manage");
   const query = await searchParams;
-  const [list, shops] = await Promise.all([listImports(pageNumber(query.page)), listVisibleShops()]);
+  const [list, shops, rejected] = await Promise.all([listImports(pageNumber(query.page)), listVisibleShops(), listRejectedFiles()]);
   const batches = list.items;
 
   return (
@@ -72,7 +74,7 @@ export default async function ImportsPage({ searchParams }: PageProps<"/psg/impo
                       {batch.fileName}
                     </Link>
                     <span className="block text-xs text-gray-500">
-                      {batch.kind === "visits" ? "Repair visits" : batch.kind === "legacy_cases" ? "Legacy cases" : "Legacy history"} · {batch.rowCount} rows
+                      {KIND_NAMES[batch.kind]} · {batch.rowCount} rows
                       {batch.isTest ? " · Test data" : ""}
                     </span>
                   </td>
@@ -94,6 +96,27 @@ export default async function ImportsPage({ searchParams }: PageProps<"/psg/impo
           </table>
         </div>
         <Pagination {...list} path="/psg/imports" query={query} label="Import pages" />
+        {rejected.length > 0 && (
+          <section aria-labelledby="rejected-files" className="mt-8">
+            <h2 id="rejected-files" className="text-base font-semibold text-brand-navy-900">
+              Files that could not be read
+            </h2>
+            <p className="mt-1 text-xs text-gray-500">Nothing from these files was staged or sent. Fix the file and upload it again. The latest {rejected.length} are shown; all are kept in the audit history.</p>
+            <ul className="mt-3 flex flex-col gap-2">
+              {rejected.map((r, i) => (
+                <li key={i} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm">
+                  <p className="font-medium text-gray-900">
+                    {r.after.fileName} <span className="font-normal text-gray-500">· {r.shopName ?? "Unknown shop"}{r.after.isTest ? " · Test data" : ""}</span>
+                  </p>
+                  <p className="text-brand-red-dark">{r.after.error}</p>
+                  <p className="mt-0.5 break-all text-xs text-gray-500">
+                    {dateTime.format(r.at)} · {r.actorName ?? "System"} · {Math.ceil(r.after.bytes / 1024)} KB · SHA-256 {r.after.sourceHash.slice(0, 12)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </section>
       {canImport && (
         <section aria-labelledby="new-import" className="h-fit rounded-xl border border-gray-200 bg-white p-5">

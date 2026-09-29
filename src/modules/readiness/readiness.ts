@@ -1,5 +1,5 @@
 import "server-only";
-import { getDb } from "@/db/client";
+import { getDb, type Tx } from "@/db/client";
 import { env } from "@/lib/env";
 import { requireCapability } from "@/modules/access/principal";
 import type { EmailFacts } from "./policy";
@@ -13,6 +13,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function emailFacts(): EmailFacts {
   const e = env();
   return { provider: e.EMAIL_PROVIDER, webhookKey: Boolean(e.SENDGRID_WEBHOOK_PUBLIC_KEY), from: e.EMAIL_FROM };
+}
+
+/**
+ * What still blocks a shop's first switch to Live (SR-37: launch after internal
+ * testing and PSG acceptance). Runs in the caller's transaction and does NOT authorize.
+ */
+export async function launchBlockers(tx: Tx, shopId: string): Promise<string[]> {
+  const m = await store.manifest(tx, emailFacts(), shopId);
+  const shop = m.shops[0];
+  return shop ? shop.missing.map((c) => `Launch checklist: ${c.label}`) : [];
 }
 
 export async function getManifest() {

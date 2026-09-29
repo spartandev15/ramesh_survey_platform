@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { env } from "@/lib/env";
 
 /**
  * Fixed-window rate limit shared by every app instance through the database
@@ -32,8 +33,18 @@ export async function consumeRateLimit(key: string, limit: number, windowSeconds
   return Number(updated.rows[0]?.count ?? 0) <= limit;
 }
 
-/** Client address for rate limiting. Trusts the first X-Forwarded-For hop set by the deployment's proxy. */
-export function clientAddress(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || headers.get("x-real-ip") || "unknown";
+const ADDRESS_RE = /^[0-9A-Fa-f:.]{2,45}$/;
+
+/**
+ * Client address for rate limiting. A client can put anything at the start of
+ * X-Forwarded-For, so only the entry our own proxies appended is trusted: the
+ * one `hops` places from the end. Anything that is not an IP address is ignored.
+ */
+export function clientAddress(headers: Headers, hops = env().TRUSTED_PROXY_HOPS): string {
+  const chain = (headers.get("x-forwarded-for") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const candidate = chain.length > 0 ? chain[Math.max(0, chain.length - hops)] : headers.get("x-real-ip")?.trim();
+  return candidate && ADDRESS_RE.test(candidate) ? candidate : "unknown";
 }

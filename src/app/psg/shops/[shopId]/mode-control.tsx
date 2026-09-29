@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { ShopMode } from "@/modules/shops/settings-policy";
 import { MODE_LABELS } from "@/modules/shops/fields";
@@ -14,7 +15,10 @@ export interface LiveSummary {
   deliveryCutoff: string | null;
   versionLabel: string | null;
   timezone: string;
+  waiting: { eligible: number; held: number; excluded: number; recipients: number };
 }
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 const ACTION_LABELS: Record<ShopMode, (from: ShopMode) => string> = {
   live: (from) => (from === "paused" ? "Resume Live" : "Switch to Live"),
@@ -97,11 +101,28 @@ export function ModeControl({ shopId, revision, mode, options, summary }: { shop
                       {summary.deliveryCutoff} <span className="text-gray-500">({summary.timezone})</span>
                     </dd>
                   </div>
-                  <div className="sm:col-span-2">
-                    <dt className="text-gray-500">Waiting invitations</dt>
-                    <dd className="text-gray-900">None yet. Imported records that wait for review will be listed here for you to select.</dd>
+                  <div>
+                    <dt className="text-gray-500">Waiting invitations (eligible)</dt>
+                    <dd className="text-gray-900">
+                      {plural(summary.waiting.eligible, "invitation")} to {plural(summary.waiting.recipients, "recipient")}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">Held or excluded</dt>
+                    <dd className="text-gray-900">
+                      {summary.waiting.held} held · {summary.waiting.excluded} excluded
+                    </dd>
                   </div>
                 </dl>
+              )}
+              {choice.target === "live" && (
+                <p className="mt-2 text-xs text-gray-600">
+                  Nothing waiting is sent when the shop goes Live. You choose which waiting invitations to send on{" "}
+                  <Link href={`/psg/invitations?shop=${shopId}`} className="text-brand-navy-900 underline-offset-2 hover:underline">
+                    Invitations
+                  </Link>
+                  .
+                </p>
               )}
               {choice.target === "live" && (
                 <label className="mt-3 flex items-start gap-2 text-sm text-gray-700">

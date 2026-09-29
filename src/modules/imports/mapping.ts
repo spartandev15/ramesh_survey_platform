@@ -7,7 +7,7 @@ import { isIsoDate } from "@/modules/shops/settings-policy";
  * per batch. Raw values are always kept; nothing unknown is silently replaced.
  */
 
-export type ImportKind = "visits" | "legacy_ledger" | "legacy_cases";
+export type ImportKind = "visits" | "legacy_ledger" | "legacy_cases" | "opt_outs";
 
 export interface FieldSpec {
   key: string;
@@ -46,8 +46,11 @@ const LEGACY_CASE_FIELDS: FieldSpec[] = [
   { key: "notes", label: "Notes so far", required: false, synonyms: ["notes", "comments", "history", "follow up", "follow-up"] },
 ];
 
+/** A shop's existing opt-out list, loaded before launch so nobody who opted out is surveyed (SR-37). */
+const OPT_OUT_FIELDS: FieldSpec[] = [{ key: "email", label: "Email that opted out", required: true, synonyms: ["email", "e-mail", "email address", "customer email", "opted out email"] }];
+
 export function fieldsFor(kind: ImportKind): FieldSpec[] {
-  return kind === "visits" ? VISIT_FIELDS : kind === "legacy_ledger" ? LEDGER_FIELDS : LEGACY_CASE_FIELDS;
+  return kind === "visits" ? VISIT_FIELDS : kind === "legacy_ledger" ? LEDGER_FIELDS : kind === "opt_outs" ? OPT_OUT_FIELDS : LEGACY_CASE_FIELDS;
 }
 
 export type Mapping = Record<string, string>;
@@ -190,6 +193,11 @@ export function normalizeLegacyCaseRow(raw: Record<string, string>, mapping: Map
     responseRef: text("responseRef", 200),
     notes: text("notes", 5000),
   };
+}
+
+export function normalizeOptOutRow(raw: Record<string, string>, mapping: Mapping): { emailRaw: string | null; emailNormalized: string | null } {
+  const emailRaw = cell(raw, mapping, "email") || null;
+  return { emailRaw, emailNormalized: normalizeEmail(emailRaw ?? undefined) };
 }
 
 export function normalizeLedgerRow(raw: Record<string, string>, mapping: Mapping): NormalizedLedgerRow {

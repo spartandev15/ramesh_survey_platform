@@ -311,8 +311,14 @@ export async function caseForResponse(tx: Tx, responseId: string) {
   return c ?? null;
 }
 
-/** The shop's cases: only after PSG approved outreach, and only their own (SR-34). Internal notes are removed. */
-const shopCaseWhere = (shopId: string) => and(eq(alertCase.shopId, shopId), eq(alertCase.status, "approved"));
+const everApproved = sql`EXISTS (SELECT 1 FROM alert_approval a WHERE a.case_id = ${alertCase.id})`;
+
+/**
+ * The shop's cases: only their own, once PSG has approved outreach at least once
+ * (SR-34). A later correction that sends the case back to review never hides its
+ * notes and history from the shop. Internal notes are removed.
+ */
+const shopCaseWhere = (shopId: string) => and(eq(alertCase.shopId, shopId), everApproved);
 
 export async function countShopCases(tx: Tx, shopId: string) {
   const [row] = await tx.select({ n: count() }).from(alertCase).where(shopCaseWhere(shopId));
@@ -332,7 +338,7 @@ export async function listShopCases(tx: Tx, shopId: string, offset: number, size
 
 export async function getShopCase(tx: Tx, shopId: string, caseId: string) {
   const full = await getCase(tx, caseId);
-  if (!full || full.case.shopId !== shopId || full.case.status !== "approved") return null;
+  if (!full || full.case.shopId !== shopId || full.approvals.length === 0) return null;
   return { ...full, notes: full.notes.filter((n) => n.note.visibility === "shop"), approvals: [], deliveries: [] };
 }
 

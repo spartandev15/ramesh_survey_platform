@@ -2,6 +2,8 @@ import "server-only";
 import { getDb } from "@/db/client";
 import { requireCapability } from "@/modules/access/principal";
 import { listShopAdditionVersions } from "@/modules/instruments/store";
+import { listUnsent, type QueueRow } from "@/modules/invitations/store";
+import { launchBlockers } from "@/modules/readiness/readiness";
 import type { SettingsInput, ShopMode } from "./settings-policy";
 import * as store from "./settings-store";
 
@@ -16,6 +18,27 @@ function requireId(id: string) {
   if (!UUID_RE.test(id)) throw new store.ShopSettingsError("not_found", "This shop no longer exists.");
 }
 
+/**
+ * What is waiting to send before Live (PDF 03 §1): eligible, held and excluded
+ * production invitations with no invitation email yet, and how many people they reach.
+ */
+export interface WaitingSummary {
+  eligible: number;
+  held: number;
+  excluded: number;
+  recipients: number;
+}
+
+function summarizeWaiting(rows: QueueRow[]): WaitingSummary {
+  const eligible = rows.filter((r) => r.view === "ready" || r.view === "waiting");
+  return {
+    eligible: eligible.length,
+    held: rows.filter((r) => r.view === "held").length,
+    excluded: rows.filter((r) => r.view === "excluded").length,
+    recipients: new Set(eligible.map((r) => r.email?.trim().toLowerCase()).filter(Boolean)).size,
+  };
+}
+
 export async function getShopSettingsPage(shopId: string) {
   await requireCapability("psg.workspace");
   if (!UUID_RE.test(shopId)) return null;
@@ -25,7 +48,8 @@ export async function getShopSettingsPage(shopId: string) {
     const versions = await store.listAssignableVersions(tx);
     const history = await store.listSettingsHistory(tx, shopId);
     const additions = await listShopAdditionVersions(tx, shopId);
-    return { ...view, versions, history, additions };
+    const waiting = summarizeWaiting(await listUnsent(tx, shopId, false));
+    return { ...view, versions, history, additions, waiting };
   });
 }
 
@@ -51,7 +75,17 @@ export async function updateShopSettings(shopId: string, expectedRevision: numbe
 export async function changeShopMode(shopId: string, expectedRevision: number, target: ShopMode) {
   const { principal } = await requireCapability("shop.manage");
   requireId(shopId);
-  return getDb().transaction((tx) => store.changeMode(tx, { type: "user", userId: principal.userId }, shopId, expectedRevision, target));
+  return getDb().transaction(async (tx) => {
+    // The first switch to Live needs the whole launch checklist, acceptance last (SR-37). Resuming a paused shop does not.
+    if (target === "live") {
+      const view = await store.getSettings(tx, shopId);
+      if (view && !view.settings.activatedAt) {
+        const blockers = await launchBlockers(tx, shopId);
+        if (blockers.length > 0) throw new store.ShopSettingsError("invalid", "The shop cannot switch to Live until its launch checklist is complete.", blockers);
+      }
+    }
+    return store.changeMode(tx, { type: "user", userId: principal.userId }, shopId, expectedRevision, target);
+  });
 }
 
 export async function setShopLegacyCoverage(shopId: string, expectedRevision: number, confirmed: boolean) {

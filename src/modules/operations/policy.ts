@@ -17,7 +17,7 @@ export const QUEUE_LABELS: Record<QueueKind, string> = {
 };
 
 export const QUEUE_HELP: Record<QueueKind, string> = {
-  held_import: "Imported visits that cannot be invited yet. Correct the details, then send from Invitations.",
+  held_import: "Imported visits that cannot be invited yet, and file rows that could not become a visit. Correct the details, then send from Invitations; for a row, fix the source and re-import, then mark it reviewed.",
   email_unknown: "The provider may or may not have sent these. Check the provider before deciding, because sending again could email the customer twice.",
   delivery: "Emails that failed, bounced or are waiting for PSG release after a pause.",
   worker: "Background job failures and a stopped worker. While the worker is down, no invitation, reminder or alert email is sent.",
@@ -26,8 +26,13 @@ export const QUEUE_HELP: Record<QueueKind, string> = {
 };
 
 /** Subjects an operator item can point at; the same names the audit log uses. */
-export const SUBJECT_TYPES = ["invitation", "email_intent", "survey_response", "suppression_action", "worker_job", "worker"] as const;
+export const SUBJECT_TYPES = ["invitation", "email_intent", "survey_response", "suppression_action", "worker_job", "worker", "import_row"] as const;
 export type SubjectType = (typeof SUBJECT_TYPES)[number];
+
+/** Items that leave the queue once a person records what they did: a failed job, or an import row that never became a visit. */
+export const REVIEWABLE_TYPES = ["worker_job", "import_row"] as const;
+export type ReviewableType = (typeof REVIEWABLE_TYPES)[number];
+export const isReviewableType = (value: string): value is ReviewableType => (REVIEWABLE_TYPES as readonly string[]).includes(value);
 
 export const isSubjectType = (value: string): value is SubjectType => (SUBJECT_TYPES as readonly string[]).includes(value);
 
@@ -84,6 +89,7 @@ const HISTORY_LABELS: Record<string, string> = {
   "operator.owner_assigned": "Owner assigned",
   "operator.owner_cleared": "Owner removed",
   "operator.failure_reviewed": "Failure reviewed",
+  "operator.row_reviewed": "Import row reviewed",
   "invitation.send_requested": "Invitation send requested",
   "invitation.contact_corrected": "Contact details corrected",
   "invitation.link_issued": "Printable link issued",

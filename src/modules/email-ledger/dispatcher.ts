@@ -6,9 +6,21 @@ import { logger } from "@/lib/logger";
 import { EmailAcceptanceUnknownError, EmailRejectedError, type EmailTransport } from "@/modules/email/transport";
 import * as store from "./store";
 
-/** Opt-out links are signed with a key derived from the app secret, never the secret itself. */
+/**
+ * Opt-out links are signed with their own key when OPT_OUT_SECRET is set, so
+ * rotating the sign-in secret never breaks links already emailed; otherwise
+ * with a key derived from the app secret, never the secret itself.
+ */
 export function optOutSecret(): string {
-  return createHmac("sha256", env().BETTER_AUTH_SECRET).update("survey-opt-out-key").digest("hex");
+  const e = env();
+  return e.OPT_OUT_SECRET ?? derivedOptOutSecret();
+}
+
+const derivedOptOutSecret = () => createHmac("sha256", env().BETTER_AUTH_SECRET).update("survey-opt-out-key").digest("hex");
+
+/** Keys an opt-out link may be signed with: links sent before OPT_OUT_SECRET was set keep working. */
+export function optOutVerifySecrets(): string[] {
+  return [...new Set([optOutSecret(), derivedOptOutSecret()])];
 }
 
 function linkConfig(): store.LinkConfig {

@@ -1,6 +1,9 @@
 import "server-only";
 import { z } from "zod";
 
+/** `NAME=` in a .env file means "not set". */
+const blankAsUnset = (v: unknown) => (v === "" ? undefined : v);
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -14,7 +17,14 @@ const envSchema = z
     SENDGRID_WEBHOOK_PUBLIC_KEY: z.string().optional(),
     // PSG staff who get queue-health notices and the daily reconciliation (PDF 09), comma separated. Unset: notices are only logged.
     OPS_ALERT_EMAILS: z.string().optional(),
+    // Where customers can ask for help when a survey link cannot be renewed (PDF 03 §3). Unset: they are told to contact the shop.
+    SURVEY_HELP_EMAIL: z.preprocess(blankAsUnset, z.email().optional()),
     LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
+    // Proxies in front of the app that append to X-Forwarded-For (a CDN plus a load balancer is 2). With no proxy,
+    // Next.js fills the header from the connection, so 1 is right for both a single proxy and none.
+    TRUSTED_PROXY_HOPS: z.preprocess(blankAsUnset, z.coerce.number().int().min(1).max(5).default(1)),
+    // Signs opt-out links. Optional: derived from BETTER_AUTH_SECRET when unset. Set it before rotating that secret so sent links keep working.
+    OPT_OUT_SECRET: z.preprocess(blankAsUnset, z.string().min(32, "OPT_OUT_SECRET must be at least 32 characters").optional()),
   })
   .refine((e) => e.EMAIL_PROVIDER !== "sendgrid" || !!e.SENDGRID_API_KEY, {
     message: "SENDGRID_API_KEY is required when EMAIL_PROVIDER=sendgrid",

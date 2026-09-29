@@ -2,7 +2,7 @@ import "server-only";
 import { getDb } from "@/db/client";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { hashToken, isWellFormedToken } from "@/modules/responses/tokens";
-import { optOutSecret } from "./dispatcher";
+import { optOutVerifySecrets } from "./dispatcher";
 import { verifyOptOutToken } from "./opt-out-token";
 import * as store from "./store";
 
@@ -25,6 +25,9 @@ async function limit(kind: string, address: string, tokenKey: string, perAddress
   if (!allowedAddress || !allowedToken) throw new PublicRateLimitedError();
 }
 
+/** The invitation an opt-out link is for, under the current or the earlier signing key. */
+const verifiedInvitation = (token: string) => optOutVerifySecrets().map((secret) => verifyOptOutToken(secret, token)).find(Boolean) ?? null;
+
 /** Always resolves the same way; an email goes out only when the record allows it. */
 export async function requestSurveyRenewal(token: string, address: string): Promise<void> {
   const key = isWellFormedToken(token) ? hashToken(token).slice(0, 32) : "malformed";
@@ -35,7 +38,7 @@ export async function requestSurveyRenewal(token: string, address: string): Prom
 
 /** Shop branding for the opt-out page, or null for a forged or unknown link. Never the address. */
 export async function loadOptOutPage(token: string) {
-  const invitationId = verifyOptOutToken(optOutSecret(), token);
+  const invitationId = verifiedInvitation(token);
   if (!invitationId) return null;
   const ctx = await getDb().transaction((tx) => store.optOutContext(tx, invitationId));
   return ctx ? { shopName: ctx.shopName, logoUrl: ctx.logoUrl, brandColor: ctx.brandColor } : null;
@@ -43,7 +46,7 @@ export async function loadOptOutPage(token: string) {
 
 export async function confirmOptOut(token: string, address: string): Promise<boolean> {
   await limit("optout", address, token.slice(0, 40), 20, 10);
-  const invitationId = verifyOptOutToken(optOutSecret(), token);
+  const invitationId = verifiedInvitation(token);
   if (!invitationId) return false;
   await getDb().transaction((tx) => store.recordOptOut(tx, { type: "respondent" }, invitationId, "respondent_link", new Date()));
   return true;

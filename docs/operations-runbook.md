@@ -24,6 +24,9 @@ All settings are environment variables; `.env.example` lists them.
 | `EMAIL_PROVIDER`, `EMAIL_FROM`, `SENDGRID_API_KEY` | `sendgrid` in production; `log` prints emails locally |
 | `SENDGRID_WEBHOOK_PUBLIC_KEY` | Signed delivery events; without it the webhook refuses every event |
 | `OPS_ALERT_EMAILS` | PSG operations addresses (comma separated) for stuck-queue notices and the daily counts |
+| `SURVEY_HELP_EMAIL` | Optional help address shown to customers whose expired link cannot be renewed; otherwise they are told to contact the shop |
+| `TRUSTED_PROXY_HOPS` | Proxies in front of the app that add to `X-Forwarded-For` (default 1). Wrong values let one address share or dodge rate limits |
+| `OPT_OUT_SECRET` | Optional signing key for opt-out links. Set it before ever rotating `BETTER_AUTH_SECRET`; links signed with the older key keep working |
 | `LOG_LEVEL` | `info` in production |
 
 In production, survey links are removed from logs automatically.
@@ -42,7 +45,7 @@ Thresholds are the package's proposals; PSG confirms the real ones at kickoff (s
 Work top to bottom. Every list is paged; test data is hidden unless you ask for it.
 
 1. **Operator queues** (`/psg/operations`): everything that failed or waits for a person, oldest first. Take ownership, open the item, fix it on its own page.
-2. **Imports** (`/psg/imports`): rows held for identity, date or email. Fix them in **Invitations** (Held tab). Fixing never sends by itself; check legacy coverage before any manual send.
+2. **Imports** (`/psg/imports`): rows held for date or email are fixed in **Invitations** (Held tab). Fixing never sends by itself; check legacy coverage before any manual send. File rows that never became a visit (unclear visit identity, failed rows) sit in the operator queue: get the corrected row from the shop, import it again, then mark the row reviewed with what you did. Files that could not be read at all are listed under *Files that could not be read*; nothing from them was staged.
 3. **Alert review** (`/psg/alerts`): negative feedback waits here. Check the match and source, adjust recipients, **Approve & send**, then watch **Email review** for the delivery result.
 4. **Responses** (`/psg/responses`): match unmatched responses to their visit and settle duplicates. Originals are kept; every change is audited.
 5. **Suppression queue** (`/psg/suppression`): routine-mail changes to make by hand in FileMaker before the next mail run. Acknowledge each one with what you did. If you cannot, stop that mail run through its owner; never mark it done.
@@ -52,9 +55,47 @@ Work top to bottom. Every list is paged; test data is hidden unless you ask for 
 ## 5. Launching a shop
 
 1. **Shops → the shop**: set branding, delivery cutoff, survey version, reminder delay, link lifetime and alert recipients. New shops start in Test mode; Test mode only emails addresses on **Test recipients**.
-2. **Launch readiness** (`/psg/readiness`): every shop's checklist. Record each manual check with a note; the last check, *PSG accepted for launch*, is refused while anything else fails.
-3. Switch to **Live** on the shop page. Nothing is sent in bulk by the switch: waiting invitations are selected deliberately in **Invitations**.
-4. After launch, read back the first real results: a provider receipt, a saved response, the shop's dashboard and one approved alert.
+2. **Imports**: load the shop's existing opt-out list (*Existing opt-out list*, production data), and its legacy survey history, before any visit import.
+3. **Launch readiness** (`/psg/readiness`): every shop's checklist. Record each manual check with a note; the last check, *PSG accepted for launch*, is refused while anything else fails. **Export CSV** keeps the whole manifest as launch evidence.
+4. Switch to **Live** on the shop page. The first switch is refused until the checklist is complete. The summary shows the survey version, cutoff, and how many waiting invitations are eligible, held or excluded and how many people they reach. Nothing is sent in bulk by the switch: waiting invitations are selected deliberately in **Invitations**.
+5. After launch, read back the first real results: a provider receipt, a saved response, the shop's dashboard and one approved alert.
+
+## 5a. Before the first production release
+
+Confirm each line and keep the answers with the release note ([release-notes.md](release-notes.md)).
+
+1. Migrations applied to the production database (`npm run db:migrate`); the previous build is kept for rollback (section 6).
+2. Automated backups with point-in-time recovery are on, and a restore drill has passed on a copy (section 7).
+3. Sender domain authenticated in SendGrid (SPF, DKIM, DMARC); `EMAIL_PROVIDER=sendgrid`; `SENDGRID_WEBHOOK_PUBLIC_KEY` set and the SendGrid Event Webhook pointed at `/api/survey-mail/events` with signing on.
+4. The worker runs as a service that restarts by itself; `/api/health` answers 200 and an uptime monitor watches it; `OPS_ALERT_EMAILS` set.
+5. **Test recipients** holds only internal addresses.
+6. Named people are on the roster below, with a backup each, and can open **Operator queues**.
+7. **Internal production smoke test**, on an internal test shop, never a customer: import one visit to an allowlisted address, receive the email, answer with a low rating, see the result on the shop dashboard, approve the alert and receive it, and see both emails as *Delivered* in **Email review**. Then check the daily counts email the next morning.
+
+## 5b. Owners and escalation
+
+Launch needs real names here (PDF 09; gate G-05). Fill this in with PSG and keep it current.
+
+| Area | Owner | Backup | Escalate to |
+| --- | --- | --- | --- |
+| Product acceptance and launch sign-off | | | |
+| Imports and held rows | | | |
+| Alert review | | | |
+| Suppression changes in FileMaker | | | |
+| Email failures and provider | | | |
+| Matching and duplicates | | | |
+| Incidents and outages | | | |
+| FileMaker bridge | | | |
+
+## 5c. Handing over legacy unresolved cases
+
+For open follow-up cases from the old system (SR-46; owner until handoff: G-12).
+
+1. Get the export of open and closed legacy cases from the legacy owner.
+2. **Imports → Legacy follow-up cases**: upload it, check the preview (closed cases are kept for reference only; a repeated case ID is refused) and commit. Nothing is emailed.
+3. Agree the handoff time with the legacy owner. Until then the legacy owner keeps working the case; a re-import updates it and never creates a second one.
+4. **Legacy cases** (`/psg/legacy-cases`): take each case over with a note at the agreed time. After handoff, only Hub works it and re-imports leave it unchanged, so there is no duplicate outreach.
+5. Reconcile: the number of open cases in the legacy system at handoff equals the cases Hub took over plus those still with the legacy owner. The operator responsible records acceptance in the case notes.
 
 ## 6. Pause and rollback
 

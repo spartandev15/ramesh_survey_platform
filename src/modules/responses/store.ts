@@ -232,7 +232,7 @@ export async function saveDraft(tx: Tx, token: string, expectedRevision: number,
 
 export type SubmitResult =
   | { ok: true; responseId: string; submittedAt: Date; outcomes: Outcomes; replayed: boolean }
-  | { ok: false; reason: "invalid" | "expired" | "already_submitted"; errors?: AnswerError[] };
+  | { ok: false; reason: "invalid" | "expired" | "already_submitted" | "stale"; errors?: AnswerError[] };
 
 /**
  * Submit once (SR-17), in one transaction (PDF 04, transaction 3): lock the
@@ -242,7 +242,7 @@ export type SubmitResult =
  * A retry with the same key and answers, or an identical resubmission,
  * returns the original result. Different answers after submission are rejected.
  */
-export async function submitResponse(tx: Tx, token: string, requestKey: string, input: unknown, now = new Date()): Promise<SubmitResult> {
+export async function submitResponse(tx: Tx, token: string, requestKey: string, input: unknown, now = new Date(), expectedRevision?: number): Promise<SubmitResult> {
   const resolved = await resolve(tx, token, now, true);
   if (!resolved) return { ok: false, reason: "invalid" };
   const { context, response } = resolved;
@@ -259,6 +259,8 @@ export async function submitResponse(tx: Tx, token: string, requestKey: string, 
     return { ok: true, responseId: response.id, submittedAt: response.submittedAt!, outcomes: original.outcomes as Outcomes, replayed: true };
   }
   if (resolved.tokenExpired) return { ok: false, reason: "expired" };
+  // A tab that missed a newer autosave (another window) reloads before submitting older answers (PDF 04, transaction 3).
+  if (expectedRevision !== undefined && response && response.draftRevision > expectedRevision) return { ok: false, reason: "stale" };
   if (!evaluated.ok) return { ok: false, reason: "invalid", errors: evaluated.errors };
 
   // First committed submission for the visit is the counted one (SR-19).

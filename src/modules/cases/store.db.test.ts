@@ -217,6 +217,7 @@ describe.skipIf(!process.env.DATABASE_URL)("alerts, cases and suppression", asyn
       const responseId = await submitOnline(tx, s.id, "R1", low);
       const c = await caseFor(tx, responseId);
       await cases.approveAndSend(tx, actor, c.id, c.revision, ["owner@shop.example"], "");
+      await cases.addNote(tx, actor, c.id, { body: "Called the customer back", visibility: "shop", authorKind: "shop" });
       const result = await staff.correctResponse(tx, actor, responseId, 1, { ...low, ready_on_time: "yes", delay_detail: undefined }, "Customer said the car was on time");
       expect(result.alertsChanged).toBe(true);
       const after = await caseFor(tx, responseId);
@@ -224,6 +225,12 @@ describe.skipIf(!process.env.DATABASE_URL)("alerts, cases and suppression", asyn
       expect(after.outcomeChangedAt).not.toBeNull();
       expect((after.alerts as { id: string }[]).map((a) => a.id)).not.toContain("not_on_time");
       expect(await alertIntents(tx, c.id)).toHaveLength(1);
+      // The shop keeps its case, notes and history while PSG reviews again, and after a dismissal (SR-34).
+      expect((await cases.getShopCase(tx, s.id, c.id))?.notes.map((n) => n.note.body)).toEqual(["Called the customer back"]);
+      expect(await cases.countShopCases(tx, s.id)).toBe(1);
+      await cases.dismissCase(tx, actor, c.id, after.revision, "The corrected answers need no outreach");
+      expect(await cases.getShopCase(tx, s.id, c.id)).not.toBeNull();
+      expect(await cases.listShopCases(tx, s.id, 0, 25)).toHaveLength(1);
     }));
 
   it("the suppression queue needs an identified change, records the operator, and a reversal is a new action (AT-36)", () =>

@@ -213,7 +213,7 @@ export const instrumentVersion = pgTable(
   ],
 );
 
-export const importKind = pgEnum("import_kind", ["visits", "legacy_ledger", "legacy_cases"]);
+export const importKind = pgEnum("import_kind", ["visits", "legacy_ledger", "legacy_cases", "opt_outs"]);
 export const importBatchStatus = pgEnum("import_batch_status", ["preview", "committed"]);
 export const importRowAction = pgEnum("import_row_action", ["created", "reused", "held", "excluded", "rejected"]);
 
@@ -530,6 +530,8 @@ export const surveyResponse = pgTable(
     uniqueIndex("survey_response_one_online_per_invitation").on(t.invitationId).where(sql`${t.source} = 'online'`),
     // At most one counted response per visit, even under concurrent submits (AT-19).
     uniqueIndex("survey_response_one_canonical_per_visit").on(t.visitId).where(sql`${t.canonical}`),
+    // A submit key is used once per source, so a concurrent retry can never save twice (PDF 05).
+    uniqueIndex("survey_response_submit_key_unique").on(t.source, t.submitRequestKey).where(sql`${t.submitRequestKey} IS NOT NULL`),
     index("survey_response_shop_submitted_idx").on(t.shopId, t.submittedAt.desc()),
     index("survey_response_match_idx").on(t.matchStatus).where(sql`${t.matchStatus} <> 'matched'`),
     check("survey_response_submitted_complete", sql`${t.status} = 'draft' OR (${t.submittedAt} IS NOT NULL AND ${t.submitPayloadHash} IS NOT NULL)`),
@@ -910,7 +912,7 @@ export const operatorItem = pgTable(
     ownerUserId: text("owner_user_id").references(() => user.id),
     assignedAt: timestamp("assigned_at", { withTimezone: true }),
     assignedBy: text("assigned_by").references(() => user.id),
-    // Worker failures only: a person looked at the error and recorded what they did.
+    // Worker failures and import rows only: a person looked at the problem and recorded what they did.
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     reviewedBy: text("reviewed_by").references(() => user.id),
     reviewNote: text("review_note"),
@@ -920,7 +922,7 @@ export const operatorItem = pgTable(
   (t) => [
     primaryKey({ columns: [t.subjectType, t.subjectId] }),
     index("operator_item_owner_idx").on(t.ownerUserId).where(sql`${t.ownerUserId} is not null`),
-    check("operator_item_subject_type", sql`${t.subjectType} IN ('invitation', 'email_intent', 'survey_response', 'suppression_action', 'worker_job', 'worker')`),
+    check("operator_item_subject_type", sql`${t.subjectType} IN ('invitation', 'email_intent', 'survey_response', 'suppression_action', 'worker_job', 'worker', 'import_row')`),
     check("operator_item_review_complete", sql`${t.reviewedAt} IS NULL OR (${t.reviewedBy} IS NOT NULL AND ${t.reviewNote} IS NOT NULL)`),
   ],
 );

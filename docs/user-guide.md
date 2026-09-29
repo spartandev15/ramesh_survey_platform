@@ -37,14 +37,14 @@ The sidebar lists every screen. Lists show 20 items a page, keep your filters wh
 | Screen | Use it to |
 | --- | --- |
 | Overview | The whole project at a glance: responses per month, sources, matching, negative feedback, email, the busiest shops and system health. Production only; *Include test data* adds internal test and demo data |
-| Operator queues | Work everything that failed or waits for a person, oldest first; take ownership |
+| Operator queues | Work everything that failed or waits for a person, oldest first: held invitations, file rows that never became a visit, email problems, failed jobs, pending matches and suppression changes. Take ownership; mark a failed job or a file row reviewed with what you did |
 | Dashboard | See any shop's results exactly as that shop sees them |
 | Shops | Search by name or public link, filter by mode and type, sort, and export the list as CSV. *Add shop* opens a popup (the success message links to the new shop). On a shop, set branding, cutoff, survey version, timing, alert recipients, shop users and shop-only questions. *Link* and *QR code* open the public survey link and its QR code (download as PNG or SVG). *Delete* asks Yes or No first |
-| Launch readiness | Check every shop's launch checklist and record manual checks with a note |
+| Launch readiness | Check every shop's launch checklist, record manual checks with a note, and export the whole manifest as CSV. A shop's first switch to Live needs every check |
 | Surveys | Build and preview a survey, publish a TEST or verified version, create test links |
-| Imports | Upload a shop's customer file, review the dry-run preview row by row, then commit |
+| Imports | Upload a shop's customer file, legacy survey history, legacy cases or existing opt-out list; review the dry-run preview row by row, then commit. Files that could not be read are listed with the reason |
 | Invitations | See each visit's invitation: ready, waiting, held (with the reason), excluded or sent; fix details or print a link and QR code |
-| Responses | Enter a paper survey, match responses to visits, settle duplicates, correct answers (the original is kept) |
+| Responses | Enter a paper survey, match responses to visits, settle duplicates (both answer sets side by side, differences highlighted), correct answers (the original is kept) |
 | Alert review | Review negative feedback, choose recipients, approve and send, resolve cases |
 | Legacy cases | Take over open cases from the old system, once, with a note |
 | Suppression queue | Apply routine-mail changes in FileMaker by hand and acknowledge each one |

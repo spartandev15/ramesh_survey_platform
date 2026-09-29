@@ -30,6 +30,14 @@ test("PSG sees every shop's launch checklist and records checks", async ({ page 
   await expect(page.getByText(/Not in scope \(internal test shops/)).toContainText(TEST_SHOP.name);
   await expect(page.getByRole("heading", { name: "Email sending, shared by every shop" })).toBeVisible();
 
+  // The whole manifest exports as CSV to keep as launch evidence (WP-11).
+  const exported = await page.request.get("/psg/readiness/export");
+  expect(exported.status()).toBe(200);
+  // The file starts with a byte-order mark so Excel reads it as UTF-8.
+  const csv = (await exported.text()).replace(/^﻿/, "");
+  expect(csv.split(/\r\n/)[0]).toBe('"Shop","Mode","First activated","Ready","Check","Status","Detail","Recorded by","Recorded at","Note"');
+  expect(csv).toContain(`"${name}","Test","","no","Company mapping confirmed","fail"`);
+
   // Record one check on the shop's page, with a note.
   await row.getByRole("link", { name }).click();
   await expect(page.getByRole("heading", { name: "Launch readiness" })).toBeVisible();

@@ -182,6 +182,24 @@ describe.skipIf(!process.env.DATABASE_URL)("FileMaker bridge", async () => {
       expect(fm.records.get(mapping.externalId)!.record.match_status).toBe("matched");
     }));
 
+  it("an accepted write whose read-back does not match is never confirmed, and retries until it does (PDF 07 suite 9)", () =>
+    inRollback(async (tx) => {
+      const { responseId } = await productionResponse(tx);
+      await enable(tx);
+      const fm = new MemoryBridgeAdapter();
+      fm.dropOnWrite = "answers";
+      let at = new Date();
+      expect(await cycle(tx, fm, [responseId], at)).toMatchObject({ confirmed: 0, errors: 1 });
+      const [waiting] = await events(tx, [responseId]);
+      expect(waiting).toMatchObject({ state: "retrying", lastError: "FileMaker accepted the write but the read-back did not match." });
+      expect(await tx.select().from(bridgeMapping).where(eq(bridgeMapping.entityId, responseId))).toHaveLength(0);
+
+      fm.dropOnWrite = null;
+      at = new Date(at.getTime() + minutes(90));
+      expect(await cycle(tx, fm, [responseId], at)).toMatchObject({ confirmed: 1, errors: 0 });
+      expect(await tx.select().from(bridgeMapping).where(eq(bridgeMapping.entityId, responseId))).toHaveLength(1);
+    }));
+
   it("gives up after repeated failures and lets PSG retry the same write", () =>
     inRollback(async (tx) => {
       const { responseId } = await productionResponse(tx);

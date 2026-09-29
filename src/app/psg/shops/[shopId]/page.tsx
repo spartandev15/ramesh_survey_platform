@@ -87,7 +87,11 @@ export default async function ShopSettingsPage({ params, searchParams }: PagePro
   };
   // Only offer changes that could ever apply; blocked ones explain what is missing.
   const options = SHOP_MODES.filter((m) => m !== settings.mode)
-    .map((target) => ({ target, issues: modeChangeIssues(context, target) }))
+    .map((target) => ({
+      target,
+      // The first switch to Live also needs the whole launch checklist (SR-37).
+      issues: [...modeChangeIssues(context, target), ...(target === "live" && !settings.activatedAt && readiness ? readiness.shop.missing.map((c) => `Launch checklist: ${c.label}`) : [])],
+    }))
     .filter((o) => !(o.target === "test" && settings.activatedAt) && !(o.target === "paused" && settings.mode !== "live") && !(o.target !== "test" && shop.isTestShop));
 
   return (
@@ -145,6 +149,7 @@ export default async function ShopSettingsPage({ params, searchParams }: PagePro
                     deliveryCutoff: settings.deliveryCutoff,
                     versionLabel: version ? versionLabel(version) : null,
                     timezone: shop.timezone,
+                    waiting: data.waiting,
                   }}
                 />
               </div>
@@ -162,7 +167,7 @@ export default async function ShopSettingsPage({ params, searchParams }: PagePro
                 </span>
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                What must be true before this shop goes Live. Ready does not switch the mode.{" "}
+                What must be true before this shop first goes Live. Ready does not switch the mode by itself; you still switch it above.{" "}
                 <Link href="/psg/readiness" className="text-brand-navy-900 underline-offset-2 hover:underline">
                   All shops
                 </Link>

@@ -1,5 +1,4 @@
 import { UnauthenticatedError, isAccessError } from "@/modules/access/errors";
-import { parseFilters, localDate } from "@/modules/dashboard/cohort";
 import { exportCsv } from "@/modules/dashboard/dashboard";
 
 /**
@@ -9,9 +8,8 @@ import { exportCsv } from "@/modules/dashboard/dashboard";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const shopId = url.searchParams.get("shop") ?? "";
-  const filters = parseFilters(Object.fromEntries(url.searchParams), localDate(new Date(), "America/New_York"));
   try {
-    const result = await exportCsv(shopId, filters);
+    const result = await exportCsv(shopId, Object.fromEntries(url.searchParams));
     if (!result) return Response.json({ code: "NOT_FOUND" }, { status: 404 });
     return new Response(result.csv, {
       headers: {

@@ -53,6 +53,10 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await page.locator("label", { hasText: /^1$/ }).first().click();
   await expect(page.getByText("What should we have done better?")).toBeVisible();
   await expect(page.getByText("Primary: Low satisfaction")).toBeVisible();
+  // ...and the other branch: a high rating hides the follow-up and fires no alert (AT-44: every branch).
+  await page.locator("label", { hasText: /^5$/ }).first().click();
+  await expect(page.getByText("What should we have done better?")).toHaveCount(0);
+  await expect(page.getByText("Primary: Low satisfaction")).toHaveCount(0);
 
   // 5. Publish as a test version (AT-14: unverified content never ships as verified)
   await page.getByRole("button", { name: "Publish…" }).click();

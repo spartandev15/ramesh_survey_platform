@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { assignOwnerAction, reviewFailureAction } from "./actions";
+import { assignOwnerAction, reviewItemAction } from "./actions";
 
 // The actions call revalidatePath, which returns the refreshed page in the same response, so no router.refresh().
 
@@ -77,12 +77,17 @@ export function OwnerControl({
   );
 }
 
-/** Record what was checked or fixed for one failed background job, which takes it off the queue. */
-export function ReviewForm({ jobId, revision }: { jobId: string; revision: number }) {
+const PLACEHOLDERS: Record<string, string> = {
+  worker_job: "e.g. Database restart; the next cycle ran fine",
+  import_row: "e.g. Shop sent the RO number; re-imported in the next file",
+};
+
+/** Record what was checked or fixed for a failed job or an import row, which takes it off the queue. */
+export function ReviewForm({ subjectType, subjectId, revision }: { subjectType: string; subjectId: string; revision: number }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const id = `review-${jobId}`;
+  const id = `review-${subjectType}-${subjectId}`;
 
   return (
     <div className="flex flex-col gap-1">
@@ -97,7 +102,7 @@ export function ReviewForm({ jobId, revision }: { jobId: string; revision: numbe
             onChange={(e) => setNote(e.target.value)}
             aria-describedby={error ? `${id}-error` : undefined}
             aria-invalid={error ? true : undefined}
-            placeholder="e.g. Database restart; the next cycle ran fine"
+            placeholder={PLACEHOLDERS[subjectType]}
             className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
           />
         </div>
@@ -107,7 +112,7 @@ export function ReviewForm({ jobId, revision }: { jobId: string; revision: numbe
           onClick={() =>
             startTransition(async () => {
               setError(null);
-              const result = await reviewFailureAction(jobId, revision, note);
+              const result = await reviewItemAction(subjectType, subjectId, revision, note);
               if (!result.ok) setError(result.message);
             })
           }

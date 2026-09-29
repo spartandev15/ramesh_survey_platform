@@ -115,7 +115,7 @@ async function main() {
     const second = await timed(saves, () => saveSurveyDraft(token, address, first.revision, { overall_rating: 4, ready_on_time: "yes" }));
     if (!second.ok) return void failures++;
     const key = `load-${i}-${Date.now()}`;
-    const [a, b] = await Promise.all([timed(submits, () => submitSurvey(token, address, key, answers)), timed(submits, () => submitSurvey(token, address, key, answers))]);
+    const [a, b] = await Promise.all([timed(submits, () => submitSurvey(token, address, key, answers, second.revision)), timed(submits, () => submitSurvey(token, address, key, answers, second.revision))]);
     if (a.ok) acknowledged.add(a.responseId);
     if (b.ok) acknowledged.add(b.responseId);
     if (!a.ok && !b.ok) failures++;

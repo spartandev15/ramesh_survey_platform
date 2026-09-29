@@ -34,9 +34,13 @@ const LEDGER_REASONS: Record<string, string> = {
   UPDATED_FROM_LEGACY: "Known case: updated from the legacy system",
   ALREADY_IN_HUB: "Hub already follows this case up: left unchanged",
   DUPLICATE_CASE: "Imported by another file at the same time",
+  EMAIL_MISSING: "No email in this row",
+  EMAIL_INVALID: "Not a usable email address",
+  ALREADY_OPTED_OUT: "Already opted out at this shop",
+  EMAIL_REPEATED_IN_FILE: "Same email appears earlier in this file",
 };
 
-const KIND_LABELS: Record<string, string> = { visits: "Repair visits", legacy_ledger: "Legacy survey history", legacy_cases: "Legacy follow-up cases" };
+const KIND_LABELS: Record<string, string> = { visits: "Repair visits", legacy_ledger: "Legacy survey history", legacy_cases: "Legacy follow-up cases", opt_outs: "Existing opt-out list" };
 
 const reasonLabel = (code: string) => REASON_LABELS[code as ReasonCode] ?? LEDGER_REASONS[code] ?? code;
 

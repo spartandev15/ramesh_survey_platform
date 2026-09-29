@@ -149,9 +149,9 @@ export default async function OperationsPage({ searchParams }: PageProps<"/psg/o
               )}
               {item.subjectType === "worker" && <p className="text-xs text-gray-700">Restart the worker process, then reload this page.</p>}
             </div>
-            {item.subjectType === "worker_job" && canReview && (
+            {(item.subjectType === "worker_job" || item.subjectType === "import_row") && canReview && (
               <div className="mt-3">
-                <ReviewForm jobId={item.subjectId} revision={item.revision} />
+                <ReviewForm subjectType={item.subjectType} subjectId={item.subjectId} revision={item.revision} />
               </div>
             )}
 

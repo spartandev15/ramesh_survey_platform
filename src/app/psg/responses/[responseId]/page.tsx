@@ -42,13 +42,16 @@ export default async function ResponseDetailPage({ params }: PageProps<"/psg/res
   const canMatch = hasCapability(current.principal, "match.manage");
   const canCorrect = hasCapability(current.principal, "response.correct");
   const ctx = (response.respondentContext ?? {}) as RespondentContext;
-  const [candidates, shops, alertCase, bridge] = await Promise.all([
+  const [candidates, shops, alertCase, bridge, countedFull] = await Promise.all([
     canMatch && response.matchStatus === "visit_unmatched" ? findCandidateVisits(response.id) : [],
     canMatch && response.matchStatus === "shop_unconfirmed" ? listVisibleShops() : [],
     caseForResponse(response.id),
     // Null while no FileMaker connection exists, so the page never implies a copy that is not proven (SR-35).
     responseBridgeState(response.id),
+    // Duplicate review compares both answer sets side by side (PDF 03 §5).
+    response.matchStatus === "duplicate_review" && full.counted ? getResponse(full.counted.id) : null,
   ]);
+  const counted = countedFull ? countedFull.revisions[countedFull.revisions.length - 1] : null;
 
   return (
     <div className="max-w-5xl">
@@ -203,19 +206,40 @@ export default async function ResponseDetailPage({ params }: PageProps<"/psg/res
       <section aria-labelledby="answers-heading" className="mt-6 rounded-xl border border-gray-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-5 py-3">
           <h2 id="answers-heading" className="text-base font-semibold text-brand-navy-900">
-            Answers (current revision)
+            {counted ? "Answers compared with the counted response" : "Answers (current revision)"}
           </h2>
         </div>
+        {counted && countedFull && (
+          <div className="hidden gap-1 border-b border-gray-100 bg-gray-50 px-5 py-2 text-xs font-medium uppercase tracking-wide text-gray-500 sm:grid sm:grid-cols-3">
+            <span>Question</span>
+            <span>This response · {SOURCE_LABELS[response.source]}</span>
+            <span>
+              Counted · {SOURCE_LABELS[countedFull.response.source]}
+              {countedFull.response.submittedAt ? `, ${dateTime.format(countedFull.response.submittedAt)}` : ""}
+            </span>
+          </div>
+        )}
         <dl className="divide-y divide-gray-100">
           {questions.map((q) => {
             const text = formatAnswer(q, latest.answers[q.id]);
+            const other = counted ? formatAnswer(q, counted.answers[q.id]) : undefined;
+            const differs = counted && JSON.stringify(latest.answers[q.id]) !== JSON.stringify(counted.answers[q.id]);
             return (
-              <div key={q.id} className="grid gap-1 px-5 py-3 sm:grid-cols-2">
+              <div key={q.id} className={`grid gap-1 px-5 py-3 ${counted ? "sm:grid-cols-3" : "sm:grid-cols-2"} ${differs ? "bg-amber-50/60" : ""}`}>
                 <dt className="text-sm text-gray-700">
                   {q.title}
                   {shopQuestionIds.has(q.id) && <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">Shop question, not scored</span>}
                 </dt>
-                <dd className={`text-sm ${text ? "text-gray-900" : "italic text-gray-400"}`}>{text ?? "Skipped or not shown"}</dd>
+                <dd className={`text-sm ${text ? "text-gray-900" : "italic text-gray-400"}`}>
+                  {counted && <span className="text-xs font-medium not-italic text-gray-500 sm:hidden">This response: </span>}
+                  {text ?? "Skipped or not shown"}
+                </dd>
+                {counted && (
+                  <dd className={`text-sm ${other ? "text-gray-900" : "italic text-gray-400"}`}>
+                    <span className="text-xs font-medium not-italic text-gray-500 sm:hidden">Counted: </span>
+                    {other ?? "Skipped or not shown"}
+                  </dd>
+                )}
               </div>
             );
           })}
