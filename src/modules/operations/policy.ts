@@ -30,7 +30,7 @@ export const SUBJECT_TYPES = ["invitation", "email_intent", "survey_response", "
 export type SubjectType = (typeof SUBJECT_TYPES)[number];
 
 /** Items that leave the queue once a person records what they did: a failed job, or an import row that never became a visit. */
-export const REVIEWABLE_TYPES = ["worker_job", "import_row"] as const;
+const REVIEWABLE_TYPES = ["worker_job", "import_row"] as const;
 export type ReviewableType = (typeof REVIEWABLE_TYPES)[number];
 export const isReviewableType = (value: string): value is ReviewableType => (REVIEWABLE_TYPES as readonly string[]).includes(value);
 

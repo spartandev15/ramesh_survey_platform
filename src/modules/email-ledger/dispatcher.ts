@@ -11,7 +11,7 @@ import * as store from "./store";
  * rotating the sign-in secret never breaks links already emailed; otherwise
  * with a key derived from the app secret, never the secret itself.
  */
-export function optOutSecret(): string {
+function optOutSecret(): string {
   const e = env();
   return e.OPT_OUT_SECRET ?? derivedOptOutSecret();
 }
