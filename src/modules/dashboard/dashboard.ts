@@ -1,0 +1,132 @@
+import "server-only";
+import { getDb } from "@/db/client";
+import { pageOf } from "@/lib/pagination";
+import { requireShopRead } from "@/modules/access/principal";
+import { formatAnswer } from "@/modules/instruments/describe";
+import { CATEGORY_LABELS, categorize, localDate, summarize, type Category, type DashboardFilters } from "./cohort";
+import { toCsv } from "@/lib/csv";
+import * as store from "./store";
+
+/**
+ * Shop dashboard and export (SR-27, SR-30, SR-31). Both read one cohort, so
+ * the export always reconciles to the screen (AT-31). Every entry point
+ * checks shop access first: another shop's id is simply not found (AT-01, AT-27).
+ */
+
+/** Which responses the list under the charts shows; the charts always use the whole view. */
+export const LIST_VIEWS = { all: "All", counted: "Counted", pending: "Pending match", negative: "Negative feedback", not_counted: "Not counted" } as const;
+export type ListView = keyof typeof LIST_VIEWS;
+
+export function listView(value: string | string[] | undefined): ListView {
+  return typeof value === "string" && value in LIST_VIEWS ? (value as ListView) : "all";
+}
+
+function inListView(view: ListView, category: Category, hasAlerts: boolean) {
+  switch (view) {
+    case "counted":
+      return category === "counted";
+    case "pending":
+      return category === "pending_match";
+    case "negative":
+      return hasAlerts;
+    case "not_counted":
+      return category !== "counted" && category !== "pending_match";
+    default:
+      return true;
+  }
+}
+
+export async function getDashboard(shopId: string, filters: DashboardFilters, page = 1, view: ListView = "all") {
+  await requireShopRead(shopId);
+  return getDb().transaction(async (tx) => {
+    const shop = await store.shopForDashboard(tx, shopId);
+    if (!shop) return null;
+    const rows = await store.cohortRows(tx, shopId, filters, shop.timezone, { withAnswers: false });
+    // One connection per transaction: these run one after another, never in parallel.
+    const versions = await store.versionDetails(tx, [...new Set(rows.map((r) => r.versionId))]);
+    const versionOptions = await store.shopVersions(tx, shopId);
+    const drafts = await store.draftCount(tx, shopId);
+    const history = await store.historicalSummary(tx, shopId, filters.from, filters.to);
+    const summary = summarize(rows, shop.isTestShop, versions, shop.timezone, filters);
+    // The scores and charts use every row; the list below them shows one page of the chosen view.
+    const listPage = pageOf(
+      rows.filter((r) => inListView(view, categorize(r, shop.isTestShop), r.alerts.length > 0)),
+      page,
+    );
+    const items = listPage.items.map((r) => ({
+      id: r.id,
+      submittedAt: r.submittedAt,
+      source: r.source,
+      isTest: r.isTest,
+      category: categorize(r, shop.isTestShop),
+      versionLabel: versions.get(r.versionId)?.label ?? "",
+      alerts: r.alerts.map((a) => a.label),
+      corrected: r.revision > 1,
+    }));
+    return { shop, filters, today: localDate(new Date(), shop.timezone), summary, list: { ...listPage, items }, listView: view, versionOptions, drafts, history };
+  });
+}
+
+/**
+ * The same cohort as the dashboard, one row per submitted response, with a
+ * column saying whether it counts. Answers export under stable question ids.
+ */
+export async function exportCsv(shopId: string, filters: DashboardFilters) {
+  await requireShopRead(shopId);
+  return getDb().transaction(async (tx) => {
+    const shop = await store.shopForDashboard(tx, shopId);
+    if (!shop) return null;
+    const rows = await store.cohortRows(tx, shopId, filters, shop.timezone);
+    const versions = await store.versionDetails(tx, [...new Set(rows.map((r) => r.versionId))]);
+
+    // The shop's own questions export under their stable add_ ids, after the shared ones (AT-45).
+    const additions = await store.versionDetails(tx, [...new Set(rows.flatMap((r) => (r.additionVersionId ? [r.additionVersionId] : [])))]);
+
+    const metricIds = [...new Set([...versions.values()].flatMap((v) => v.metrics.map((m) => m.id)))];
+    const questions = [...new Map([...versions.values(), ...additions.values()].flatMap((v) => v.definition.pages.flatMap((p) => p.questions)).map((q) => [q.id, q])).values()];
+    const header = [
+      "response_id",
+      "submitted_local_date",
+      "delivered_on",
+      "source",
+      "status",
+      "counted",
+      "survey_version",
+      "test_data",
+      "corrected",
+      ...metricIds.map((id) => `metric:${id}`),
+      "alerts",
+      ...questions.map((q) => `answer:${q.id}`),
+    ];
+    const body = rows.map((r) => {
+      const category = categorize(r, shop.isTestShop);
+      return [
+        r.id,
+        localDate(r.submittedAt, shop.timezone),
+        r.deliveredOn ?? "",
+        r.source,
+        CATEGORY_LABELS[category],
+        category === "counted" ? "yes" : "no",
+        versions.get(r.versionId)?.label ?? r.versionId,
+        r.isTest ? "yes" : "no",
+        r.revision > 1 ? "yes" : "no",
+        ...metricIds.map((id) => r.metrics[id] ?? ""),
+        r.alerts.map((a) => a.label).join("; "),
+        ...questions.map((q) => formatAnswer(q, r.answers[q.id]) ?? ""),
+      ];
+    });
+    const name = `${shop.name.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "shop"}-survey-results-${filters.from}-to-${filters.to}.csv`;
+    return { csv: toCsv(header, body), fileName: name, rows: rows.length };
+  });
+}
+
+export async function getShopResponse(shopId: string, responseId: string) {
+  await requireShopRead(shopId);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(responseId)) return null;
+  return getDb().transaction(async (tx) => {
+    const shop = await store.shopForDashboard(tx, shopId);
+    if (!shop) return null;
+    const response = await store.shopResponse(tx, shopId, responseId, shop.isTestShop);
+    return response ? { shop, response } : null;
+  });
+}

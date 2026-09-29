@@ -48,6 +48,12 @@ describe("PSG capabilities (SR-01)", () => {
     }
   });
 
+  it("lets every PSG role see operator queues, but only admins and operators review worker failures (SR-38)", () => {
+    for (const role of ["psg_admin", "psg_operator", "psg_reviewer"] as const) expect(hasCapability(principal({ psgRoles: [role] }), "operations.view")).toBe(true);
+    expect(hasCapability(principal({ psgRoles: ["psg_operator"] }), "operations.manage")).toBe(true);
+    expect(hasCapability(principal({ psgRoles: ["psg_reviewer"] }), "operations.manage")).toBe(false);
+  });
+
   it("combines capabilities across multiple roles", () => {
     const both = principal({ psgRoles: ["psg_operator", "psg_reviewer"] });
     expect(hasCapability(both, "import.manage")).toBe(true);

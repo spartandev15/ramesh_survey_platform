@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { clientAddress } from "@/lib/rate-limit";
 import type { AnswerError, Answers } from "@/modules/instruments/evaluate";
+import { PublicRateLimitedError, requestSurveyRenewal } from "@/modules/email-ledger/public";
 import { RateLimitedError, saveSurveyDraft, submitSurvey } from "@/modules/responses/respondent";
 
 /** Public respondent actions: the token is the only credential (SR-12). */
@@ -36,6 +37,19 @@ export async function submitAction(input: { token: string; requestKey: string; a
     return { ok: true, submittedAt: result.submittedAt.toISOString() };
   } catch (error) {
     if (error instanceof RateLimitedError) return { ok: false, reason: "rate_limited" };
+    throw error;
+  }
+}
+
+export type RenewalActionResult = { ok: true } | { ok: false; reason: "rate_limited" };
+
+/** The reply never says whether an email exists or will be sent (SR-22, PDF 03). */
+export async function requestRenewalAction(token: string): Promise<RenewalActionResult> {
+  try {
+    await requestSurveyRenewal(token, clientAddress(await headers()));
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof PublicRateLimitedError) return { ok: false, reason: "rate_limited" };
     throw error;
   }
 }

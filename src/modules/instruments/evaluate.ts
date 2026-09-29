@@ -12,15 +12,8 @@
  * - Answers to questions hidden at submission are omitted from the submitted
  *   set and never scored (the PDF's proposed policy).
  */
-import {
-  allQuestions,
-  maxItemValue,
-  type ComparableValue,
-  type Condition,
-  type InstrumentDefinition,
-  type Metric,
-  type Question,
-} from "./definition";
+import type { ComparableValue, Condition, InstrumentDefinition, Metric, Question } from "./definition";
+import { allQuestions, maxItemValue } from "./questions";
 
 /**
  * Bump when evaluation semantics change. Stored with every outcome so a

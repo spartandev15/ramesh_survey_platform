@@ -1,10 +1,10 @@
 import "server-only";
 import { and, asc, count, desc, eq, max, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { instrument, instrumentVersion } from "@/db/schema";
+import { instrument, instrumentVersion, shop } from "@/db/schema";
 import { recordAudit } from "@/modules/audit/audit";
 import { definitionHash } from "./canonical";
-import { parseDefinition, validateDefinition, type DefinitionIssue, type InstrumentDefinition } from "./definition";
+import { ADDITION_PREFIX, DEFINITION_SCHEMA_VERSION, parseDefinition, validateDefinition, type DefinitionIssue, type InstrumentDefinition } from "./definition";
 import type { InstrumentInput } from "./validation";
 
 /**
@@ -68,13 +68,14 @@ export async function insertInstrument(
   input: InstrumentInput,
   definition: unknown,
   sourceNote?: string,
+  shopId: string | null = null,
 ): Promise<{ instrument: InstrumentRow; draft: InstrumentVersionRow }> {
   const parsed = requireShape(definition);
   let created: InstrumentRow;
   try {
     [created] = await tx
       .insert(instrument)
-      .values({ key: input.key, name: input.name, description: input.description ?? null, createdBy: actorUserId(actor) })
+      .values({ key: input.key, name: input.name, description: input.description ?? null, shopId, createdBy: actorUserId(actor) })
       .returning();
   } catch (error) {
     if (uniqueViolation(error) === "instrument_key_unique") throw new InstrumentConflictError("That survey key is already used");
@@ -139,7 +140,8 @@ export async function publishVersion(
   if (current.revision !== expectedRevision) throw new InstrumentConflictError("This draft changed since you opened it. Reload and try again.");
 
   const definition = requireShape(current.definition);
-  const issues = validateDefinition(definition);
+  const [owner] = await tx.select({ shopId: instrument.shopId }).from(instrument).where(eq(instrument.id, current.instrumentId));
+  const issues = validateDefinition(definition, owner?.shopId ? "addition" : "core");
   if (issues.length > 0) throw new DefinitionInvalidError(issues);
 
   const sourceNote = options.sourceNote !== undefined ? options.sourceNote?.trim() || null : current.sourceNote;
@@ -278,7 +280,9 @@ export async function duplicateInstrument(
 ): Promise<{ instrument: InstrumentRow; draft: InstrumentVersionRow }> {
   const [source] = await tx.select().from(instrumentVersion).where(eq(instrumentVersion.id, fromVersionId));
   if (!source) throw new InstrumentNotFoundError();
-  const created = await insertInstrument(tx, actor, input, source.definition, source.sourceNote ?? undefined);
+  // A copy of a shop's questions stays with that shop.
+  const [owner] = await tx.select({ shopId: instrument.shopId }).from(instrument).where(eq(instrument.id, source.instrumentId));
+  const created = await insertInstrument(tx, actor, input, source.definition, source.sourceNote ?? undefined, owner?.shopId ?? null);
   await recordAudit(
     {
       ...auditActor(actor),
@@ -317,4 +321,37 @@ export async function discardDraft(tx: Tx, actor: Actor, versionId: string, expe
     tx,
   );
   return { instrumentId: draft.instrumentId };
+}
+
+/**
+ * The shop's own additional questions (SR-45): one survey per shop, created on
+ * first use, edited in the same builder and published like any version. They
+ * are shown after the shared core and never scored.
+ */
+export async function createShopAddition(tx: Tx, actor: Actor, shopId: string): Promise<InstrumentRow> {
+  // Lock the shop so two editors cannot create two addition surveys.
+  const [target] = await tx.select({ id: shop.id, name: shop.name, slug: shop.publicSlug }).from(shop).where(eq(shop.id, shopId)).for("update");
+  if (!target) throw new InstrumentNotFoundError();
+  const [existing] = await tx.select().from(instrument).where(eq(instrument.shopId, shopId));
+  if (existing) return existing;
+  const definition: InstrumentDefinition = {
+    schemaVersion: DEFINITION_SCHEMA_VERSION,
+    pages: [{ id: `${ADDITION_PREFIX}page_1`, title: `A few questions from ${target.name}`, questions: [] }],
+    metrics: [],
+    alerts: [],
+    suppressions: [],
+  };
+  const key = `shop_${target.slug.replace(/[^a-z0-9]+/g, "_")}_questions`.slice(0, 63);
+  const { instrument: created } = await insertInstrument(tx, actor, { key, name: `${target.name}: shop questions` }, definition, undefined, shopId);
+  return created;
+}
+
+/** Published versions of a shop's own questions, newest first, for its settings. */
+export async function listShopAdditionVersions(tx: Tx, shopId: string) {
+  return tx
+    .select({ id: instrumentVersion.id, instrumentId: instrument.id, version: instrumentVersion.version, isTest: instrumentVersion.isTest, status: instrumentVersion.status })
+    .from(instrumentVersion)
+    .innerJoin(instrument, eq(instrument.id, instrumentVersion.instrumentId))
+    .where(eq(instrument.shopId, shopId))
+    .orderBy(desc(instrumentVersion.version));
 }

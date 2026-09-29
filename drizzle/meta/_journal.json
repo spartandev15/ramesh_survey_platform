@@ -43,6 +43,153 @@
       "when": 1790356009125,
       "tag": "0005_response_immutability",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790436588234,
+      "tag": "0006_shop_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790436593714,
+      "tag": "0007_shop_settings_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790438642689,
+      "tag": "0008_imports",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790438655754,
+      "tag": "0009_import_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790441373722,
+      "tag": "0010_email_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790443239822,
+      "tag": "0011_matching",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790443244682,
+      "tag": "0012_matching_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790525994479,
+      "tag": "0013_historical",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790525999899,
+      "tag": "0014_historical_read_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790528313548,
+      "tag": "0015_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790528317392,
+      "tag": "0016_alerts_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790571027658,
+      "tag": "0017_operator_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790577093586,
+      "tag": "0018_shop_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790585183664,
+      "tag": "0019_shop_additions",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790585205040,
+      "tag": "0020_shop_addition_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790590013645,
+      "tag": "0021_legacy_cases",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790590019754,
+      "tag": "0022_legacy_case_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790591853885,
+      "tag": "0023_bridge",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790593035828,
+      "tag": "0024_bridge_retirement",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790593040963,
+      "tag": "0025_bridge_retirement_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790603497660,
+      "tag": "0026_ops_notice",
+      "breakpoints": true
     }
   ]
 }

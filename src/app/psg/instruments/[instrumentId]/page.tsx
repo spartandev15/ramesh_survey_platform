@@ -28,7 +28,8 @@ export default async function InstrumentPage({ params, searchParams }: PageProps
   const current = await pageRequireCapability("psg.workspace");
   const canManage = hasCapability(current.principal, "instrument.manage");
   const { instrumentId } = await params;
-  const { version: requested } = await searchParams;
+  const query = await searchParams;
+  const requested = query.version;
   const found = await load(instrumentId);
   if (!found) notFound();
 
@@ -154,7 +155,7 @@ export default async function InstrumentPage({ params, searchParams }: PageProps
         </>
       )}
 
-      {selected?.status === "published" && <TestLinksSection instrumentId={instrument.id} versionId={selected.id} canManage={canManage} />}
+      {selected?.status === "published" && <TestLinksSection instrumentId={instrument.id} versionId={selected.id} canManage={canManage} ownerShopId={instrument.shopId} query={query} />}
     </div>
   );
 }
@@ -184,7 +185,7 @@ function RuleTable({ head, rows, empty }: { head: string[]; rows: React.ReactNod
         <tbody className="divide-y divide-gray-100">
           {rows.length === 0 && (
             <tr>
-              <td colSpan={head.length} className="px-4 py-6 text-center text-gray-500">
+              <td colSpan={head.length} className="px-4 py-6 text-left text-gray-500 sm:text-center">
                 {empty}
               </td>
             </tr>

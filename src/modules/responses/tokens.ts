@@ -16,6 +16,3 @@ export function hashToken(token: string): string {
 export function isWellFormedToken(token: string): boolean {
   return /^[A-Za-z0-9_-]{43}$/.test(token);
 }
-
-/** Default personalized-link validity (SR-21). Per-shop configuration arrives with shop settings. */
-export const DEFAULT_LINK_LIFETIME_DAYS = 90;

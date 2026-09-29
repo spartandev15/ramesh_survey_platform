@@ -14,7 +14,8 @@ import {
   uniqueId,
 } from "./builder-ops";
 import { demoDefinition } from "./demo-definition";
-import { allQuestions, parseDefinition, type Question } from "./definition";
+import { parseDefinition, type Question } from "./definition";
+import { allQuestions } from "./questions";
 
 const q = (id: string) => allQuestions(demoDefinition).find((x) => x.id === id) as Question;
 

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { insertQuestion, moveItem, moveQuestion, newQuestion, questionReferences, uniqueId, type QuestionPosition } from "@/modules/instruments/builder-ops";
-import { allQuestions, parseDefinition, validateDefinition, type DefinitionIssue, type InstrumentDefinition, type QuestionType } from "@/modules/instruments/definition";
+import { ADDITION_PREFIX, parseDefinition, validateDefinition, type DefinitionIssue, type InstrumentDefinition, type QuestionType } from "@/modules/instruments/definition";
+import { allQuestions } from "@/modules/instruments/questions";
 import { discardDraftAction, publishAction, saveDraftAction } from "../../actions";
 import { SurveyCanvas, type Selection } from "./canvas";
 import { Preview } from "./preview";
@@ -26,6 +27,8 @@ export interface BuilderProps {
   lockedQuestionIds: string[];
   /** Option and row ids per locked question. */
   lockedOptionIds: Record<string, string[]>;
+  /** A shop's own questions (SR-45): questions only, ids prefixed "add_", never scored. */
+  isAddition: boolean;
 }
 
 type Tab = "questions" | "scoring" | "alerts" | "suppressions" | "preview" | "json";
@@ -39,6 +42,9 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "preview", label: "Preview" },
   { id: "json", label: "JSON" },
 ];
+
+/** Shop questions never score, alert or suppress, so these tabs are hidden for them (SR-45). */
+const RULE_TABS: Tab[] = ["scoring", "alerts", "suppressions"];
 
 /** Where an issue points, from either "pages[0].questions[1]" or "pages.0.questions.1". */
 function issueLocation(path: string): { page: number; question?: number } | null {
@@ -85,8 +91,8 @@ export function Builder(props: BuilderProps) {
 
   const issues = useMemo(() => {
     const parsed = parseDefinition(definition);
-    return parsed.ok ? validateDefinition(parsed.definition) : parsed.issues;
-  }, [definition]);
+    return parsed.ok ? validateDefinition(parsed.definition, props.isAddition ? "addition" : "core") : parsed.issues;
+  }, [definition, props.isAddition]);
   const questions = useMemo(() => allQuestions(definition), [definition]);
   const lockedQuestions = useMemo(() => new Set(props.lockedQuestionIds), [props.lockedQuestionIds]);
 
@@ -217,7 +223,7 @@ export function Builder(props: BuilderProps) {
       />
 
       <div role="tablist" aria-label="Builder sections" className="flex flex-wrap gap-1 border-b border-gray-200">
-        {TABS.map((t) => (
+        {(props.isAddition ? TABS.filter((t) => !RULE_TABS.includes(t.id)) : TABS).map((t) => (
           <button
             key={t.id}
             type="button"
@@ -243,6 +249,7 @@ export function Builder(props: BuilderProps) {
             issues={allIssues}
             lockedQuestions={lockedQuestions}
             lockedOptionIds={props.lockedOptionIds}
+            idPrefix={props.isAddition ? ADDITION_PREFIX : ""}
           />
         )}
         {tab === "scoring" && <MetricsEditor definition={definition} questions={questions} update={update} />}
@@ -359,7 +366,9 @@ function QuestionsTab({
   issues,
   lockedQuestions,
   lockedOptionIds,
+  idPrefix,
 }: {
+  idPrefix: string;
   definition: InstrumentDefinition;
   update: (fn: (d: InstrumentDefinition) => void) => void;
   selection: Selection;
@@ -384,7 +393,7 @@ function QuestionsTab({
   function insert(type: QuestionType, at: QuestionPosition) {
     // Never reuse an ID from the published version, even if that question was deleted from this draft:
     // reports compare versions by question ID, so a reused ID would join two different questions (SR-15).
-    const question = newQuestion(type, [...allQuestions(definition).map((q) => q.id), ...lockedQuestions]);
+    const question = newQuestion(type, [...allQuestions(definition).map((q) => q.id), ...lockedQuestions], idPrefix);
     // Mirror the insert on the current definition to know where it lands.
     const landed = insertQuestion(structuredClone(definition), question, at);
     update((d) => void insertQuestion(d, question, at));
@@ -419,7 +428,7 @@ function QuestionsTab({
           onInsert={insert}
           onRemove={removeQuestion}
           onAddPage={() => {
-            update((d) => void d.pages.push({ id: uniqueId("page", d.pages.map((x) => x.id)), questions: [] }));
+            update((d) => void d.pages.push({ id: uniqueId(`${idPrefix}page`, d.pages.map((x) => x.id)), questions: [] }));
             setSelection({ kind: "page", page: definition.pages.length });
           }}
           onMovePage={(from, to) => {

@@ -1,21 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { FormAlert } from "@/components/form/form-alert";
 import { SubmitButton } from "@/components/form/submit-button";
 import { TextField } from "@/components/form/text-field";
-import { slugify } from "@/modules/shops/validation";
+import { slugify, US_TIMEZONES } from "@/modules/shops/fields";
 import { createShopAction, type CreateShopState } from "./actions";
-
-const US_TIMEZONES = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Phoenix",
-  "America/Los_Angeles",
-  "America/Anchorage",
-  "Pacific/Honolulu",
-];
 
 export function CreateShopForm() {
   const [state, action, pending] = useActionState<CreateShopState, FormData>(createShopAction, { ok: false });
@@ -29,7 +20,19 @@ export function CreateShopForm() {
 
   return (
     <form action={action} noValidate className="flex flex-col gap-4">
-      {state.message && <FormAlert tone={state.ok ? "success" : "error"}>{state.message}</FormAlert>}
+      {state.message && (
+        <FormAlert tone={state.ok ? "success" : "error"}>
+          {state.message}
+          {state.created && (
+            <>
+              {" "}
+              <Link href={`/psg/shops/${state.created.id}`} className="font-medium underline underline-offset-2">
+                Open {state.created.name}
+              </Link>
+            </>
+          )}
+        </FormAlert>
+      )}
       <ShopFields key={formKey} state={state} />
       <SubmitButton pending={pending} pendingLabel="Creating...">
         Create shop

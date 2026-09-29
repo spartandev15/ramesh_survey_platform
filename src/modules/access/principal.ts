@@ -17,7 +17,7 @@ export interface CurrentUser {
 }
 
 /** Roles and memberships are always read from the database, never from the client. */
-export async function loadPrincipal(userId: string): Promise<Principal> {
+async function loadPrincipal(userId: string): Promise<Principal> {
   const db = getDb();
   const [roles, memberships] = await Promise.all([
     db.select({ role: psgStaffRole.role }).from(psgStaffRole).where(eq(psgStaffRole.userId, userId)),

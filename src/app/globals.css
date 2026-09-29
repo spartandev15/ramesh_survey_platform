@@ -7,12 +7,25 @@
   --color-brand-navy-700: #00335e;
   --color-brand-red: #be3134;
   --color-brand-red-dark: #9e2629;
-  --color-surface: #f6f7f9;
+  --color-surface: #f4f6f9;
+  /* Chart palette: calm, colour-blind-safe pairs; never colour alone (labels always shown). */
+  --color-chart-counted: #0d9488;
+  --color-chart-total: #4f46e5;
+  --color-chart-pending: #d97706;
+  --color-chart-other: #94a3b8;
+  --color-chart-negative: #e11d48;
+  --color-chart-paper: #0891b2;
+  --color-chart-public: #7c3aed;
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
-  background: var(--color-surface);
+  /* A calm, cool surface with two faint tints, so white cards stand out gently. */
+  background:
+    radial-gradient(60rem 30rem at 100% -10%, rgb(79 70 229 / 0.07), transparent 70%),
+    radial-gradient(50rem 30rem at -10% 110%, rgb(13 148 136 / 0.06), transparent 70%),
+    var(--color-surface);
+  background-attachment: fixed;
   color: #1f2937;
 }
 

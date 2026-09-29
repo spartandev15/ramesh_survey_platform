@@ -13,7 +13,10 @@ export default async function ShopLayout({ children, params }: LayoutProps<"/sho
   return (
     <WorkspaceShell
       title={shop.name}
-      nav={[{ href: `/shop/${shopId}`, label: "Survey dashboard", icon: "dashboard" }]}
+      nav={[
+        { href: `/shop/${shopId}`, label: "Survey dashboard", icon: "dashboard" },
+        { href: `/shop/${shopId}/cases`, label: "Follow-up", icon: "cases" },
+      ]}
       userName={current.name}
       userEmail={current.email}
     >

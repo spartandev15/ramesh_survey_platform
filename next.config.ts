@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   // Node-only packages that must not be bundled into server chunks.
   serverExternalPackages: ["pg", "pg-boss", "pino"],
   poweredByHeader: false,
+  experimental: {
+    // Import files are capped at 5 MB in the app; this leaves room for form overhead.
+    serverActions: { bodySizeLimit: "6mb" },
+  },
   async headers() {
     return [
       {
@@ -16,6 +20,11 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
         ],
+      },
+      {
+        // Respondent pages show saved answers behind a bearer link: no shared cache may keep them (PDF 04, SR-40).
+        source: "/survey/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-store" }],
       },
     ];
   },

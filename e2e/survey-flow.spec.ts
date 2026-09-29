@@ -71,7 +71,7 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await phone.getByLabel(/What should we have done better/).fill("Call me when it is ready");
   await expect(phone.locator('[role="status"]', { hasText: /Saved [0-9]/ })).toBeVisible();
   await phone.getByRole("button", { name: "Submit survey" }).click();
-  await expect(phone.getByText("Thank you for your feedback")).toBeVisible();
+  await expect(phone.getByRole("heading", { name: "Thank you for your feedback" })).toBeVisible();
 
   // 7. PSG sees answers, outcomes and the rule version that produced them (AT-15)
   await page.reload();

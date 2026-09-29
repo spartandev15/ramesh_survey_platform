@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { shopInputSchema, slugify } from "./validation";
+import { shopInputSchema } from "./validation";
+import { slugify } from "./fields";
 
 describe("slugify", () => {
   it("builds a readable public link name", () => {

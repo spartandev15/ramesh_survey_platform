@@ -3,7 +3,8 @@
 import { RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { QuestionField } from "@/components/survey/question-field";
-import { allQuestions, type InstrumentDefinition } from "@/modules/instruments/definition";
+import type { InstrumentDefinition } from "@/modules/instruments/definition";
+import { allQuestions } from "@/modules/instruments/questions";
 import { computeOutcomes, evaluateAnswers, evaluateCondition, evaluateSubmission, type Answers, type AnswerValue } from "@/modules/instruments/evaluate";
 import { buttonClass } from "./ui";
 

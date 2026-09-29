@@ -105,7 +105,7 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
         inert={!isDesktop && !mobileOpen}
         className={classes(
           // Below the top bar on small screens so the close button stays visible.
-          "fixed bottom-0 left-0 top-16 z-40 flex w-64 shrink-0 flex-col bg-brand-navy-900 text-white transition-[width,transform] duration-200",
+          "fixed bottom-0 left-0 top-16 z-40 flex w-64 shrink-0 flex-col bg-linear-to-b from-[#15171c] to-[#23272f] text-white shadow-xl shadow-black/10 transition-[width,transform] duration-200",
           "lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           compact && "lg:w-[76px]",
@@ -138,7 +138,7 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
                     className={classes(
                       "flex items-center gap-3 rounded-lg py-2.5 text-sm transition",
                       compact ? "justify-center px-0" : "px-3",
-                      active ? "bg-white/15 font-medium text-white" : "text-white/75 hover:bg-white/10 hover:text-white",
+                      active ? "bg-white/15 font-medium text-white shadow-inner ring-1 ring-white/15" : "text-white/70 hover:translate-x-0.5 hover:bg-white/10 hover:text-white",
                     )}
                   >
                     <Icon aria-hidden="true" className={classes("size-5 shrink-0", active && "text-brand-red")} />
@@ -152,7 +152,7 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 lg:px-6">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-gray-200/70 bg-white/85 px-4 backdrop-blur-md lg:px-6">
           <button
             ref={toggleRef}
             type="button"

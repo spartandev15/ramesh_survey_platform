@@ -28,3 +28,14 @@ export function getDb(): Database {
   globalForDb.psgDb ??= drizzle(getPool(), { schema });
   return globalForDb.psgDb;
 }
+
+/**
+ * Await queries one after another. A transaction uses one connection, so its
+ * queries must not run in parallel (Promise.all would overlap them). Drizzle
+ * queries start only when awaited, so pass them unawaited here.
+ */
+export async function inOrder<T extends readonly unknown[]>(queries: T): Promise<{ -readonly [K in keyof T]: Awaited<T[K]> }> {
+  const results: unknown[] = [];
+  for (const query of queries) results.push(await query);
+  return results as { -readonly [K in keyof T]: Awaited<T[K]> };
+}

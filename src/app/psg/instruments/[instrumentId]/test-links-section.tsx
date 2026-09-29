@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Pagination } from "@/components/pagination";
+import { pageNumber, pageOf } from "@/lib/pagination";
 import { listVisibleShops } from "@/modules/shops/shops";
 import { listTestLinks } from "@/modules/responses/test-links";
 import { TestLinkForm } from "./test-link-form";
@@ -12,8 +14,24 @@ const STATUS: Record<"not_started" | "draft" | "submitted", { label: string; cla
 };
 
 /** Internal test links for one published version, with what each test response produced. */
-export async function TestLinksSection({ instrumentId, versionId, canManage }: { instrumentId: string; versionId: string; canManage: boolean }) {
-  const [links, shops] = await Promise.all([listTestLinks(versionId), canManage ? listVisibleShops() : Promise.resolve([])]);
+export async function TestLinksSection({
+  instrumentId,
+  versionId,
+  canManage,
+  ownerShopId,
+  query,
+}: {
+  instrumentId: string;
+  versionId: string;
+  canManage: boolean;
+  ownerShopId: string | null;
+  query: Record<string, string | string[] | undefined>;
+}) {
+  const [all, allShops] = await Promise.all([listTestLinks(versionId), canManage ? listVisibleShops() : Promise.resolve([])]);
+  const list = pageOf(all, pageNumber(query.page));
+  const links = list.items;
+  // A shop's own questions are tested with that shop only (SR-45).
+  const shops = ownerShopId ? allShops.filter((s) => s.id === ownerShopId) : allShops;
 
   return (
     <section aria-labelledby="test-links" className="mt-8">
@@ -44,7 +62,7 @@ export async function TestLinksSection({ instrumentId, versionId, canManage }: {
           <tbody className="divide-y divide-gray-100">
             {links.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-6 text-left text-gray-500 sm:text-center">
                   No test links yet.
                 </td>
               </tr>
@@ -72,6 +90,7 @@ export async function TestLinksSection({ instrumentId, versionId, canManage }: {
           </tbody>
         </table>
       </div>
+      <Pagination {...list} path={`/psg/instruments/${instrumentId}`} query={query} anchor="test-links" label="Test link pages" />
     </section>
   );
 }

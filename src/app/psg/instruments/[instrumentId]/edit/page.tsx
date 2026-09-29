@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { pageRequireCapability } from "@/modules/access/page-guards";
 import { questionOptions } from "@/modules/instruments/builder-ops";
-import { allQuestions, emptyDefinition, parseDefinition } from "@/modules/instruments/definition";
+import { emptyDefinition, parseDefinition } from "@/modules/instruments/definition";
+import { allQuestions } from "@/modules/instruments/questions";
 import { getInstrument } from "@/modules/instruments/instruments";
 import { InstrumentNotFoundError } from "@/modules/instruments/store";
 import { Builder } from "./builder";
@@ -52,6 +53,7 @@ export default async function EditInstrumentPage({ params }: PageProps<"/psg/ins
         initialDefinition={parsed.ok ? parsed.definition : emptyDefinition()}
         lockedQuestionIds={lockedQuestions.map((q) => q.id)}
         lockedOptionIds={lockedOptionIds}
+        isAddition={found.instrument.shopId !== null}
       />
     </div>
   );

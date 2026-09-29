@@ -16,6 +16,7 @@
  * previews in the browser.
  */
 import { z } from "zod";
+import { allQuestions, maxItemValue } from "./questions";
 
 export const DEFINITION_SCHEMA_VERSION = 1;
 
@@ -52,7 +53,7 @@ export type Condition =
 const comparable = z.union([z.string().max(200), z.number().finite()]);
 const numericOp = z.enum(["gt", "gte", "lt", "lte"]);
 
-export const conditionSchema: z.ZodType<Condition> = z.lazy(() =>
+const conditionSchema: z.ZodType<Condition> = z.lazy(() =>
   z.union([
     z.strictObject({ all: z.array(conditionSchema).min(1).max(50) }),
     z.strictObject({ any: z.array(conditionSchema).min(1).max(50) }),
@@ -222,10 +223,6 @@ export type Metric = z.infer<typeof metricSchema>;
 export type AlertRule = z.infer<typeof alertRuleSchema>;
 export type SuppressionRule = z.infer<typeof suppressionRuleSchema>;
 
-export function allQuestions(definition: InstrumentDefinition): Question[] {
-  return definition.pages.flatMap((page) => page.questions);
-}
-
 // ---------------------------------------------------------------------------
 // Semantic validation (required before publishing)
 // ---------------------------------------------------------------------------
@@ -250,22 +247,6 @@ function numericCapable(question: Question): boolean {
       return question.columns.some((c) => c.value !== undefined);
     default:
       return false;
-  }
-}
-
-/** Largest value an item can score; needed by ratio_of_max. */
-export function maxItemValue(question: Question): number | null {
-  switch (question.type) {
-    case "rating":
-      return question.max;
-    case "number":
-      return question.max ?? null;
-    case "single_choice":
-      return Math.max(...question.choices.map((c) => c.value ?? Number.NEGATIVE_INFINITY));
-    case "matrix":
-      return Math.max(...question.columns.map((c) => c.value ?? Number.NEGATIVE_INFINITY));
-    default:
-      return null;
   }
 }
 
@@ -357,11 +338,43 @@ function checkCondition(condition: Condition, scope: ConditionScope, path: strin
 }
 
 /**
+ * A shop's additional questions (SR-45) use ids starting with this prefix, and
+ * the shared core never does, so their answers can never collide or be scored
+ * together. Additions carry questions only: no scores, alerts or suppression.
+ */
+export const ADDITION_PREFIX = "add_";
+
+export type DefinitionKind = "core" | "addition";
+
+function kindIssues(definition: InstrumentDefinition, kind: DefinitionKind): DefinitionIssue[] {
+  const issues: DefinitionIssue[] = [];
+  const ids = [...definition.pages.map((p) => ({ id: p.id, what: "Page" })), ...allQuestions(definition).map((q) => ({ id: q.id, what: "Question" }))];
+  if (kind === "addition") {
+    for (const { id, what } of ids) if (!id.startsWith(ADDITION_PREFIX)) issues.push({ path: "pages", message: `${what} id "${id}" must start with "${ADDITION_PREFIX}" in shop questions` });
+    if (definition.metrics.length || definition.alerts.length || definition.suppressions.length) {
+      issues.push({ path: "metrics", message: "Shop questions never change the shared scores, alerts or suppression. Remove those rules." });
+    }
+  } else {
+    for (const { id, what } of ids) if (id.startsWith(ADDITION_PREFIX)) issues.push({ path: "pages", message: `${what} id "${id}" starts with "${ADDITION_PREFIX}", which is kept for shop questions` });
+  }
+  return issues;
+}
+
+/**
+ * The survey a respondent sees: the shared core, then the shop's own pages.
+ * Scores, alerts and suppression come from the core only, so an addition can
+ * never change shared results (AT-45).
+ */
+export function combineDefinitions(core: InstrumentDefinition, addition: InstrumentDefinition | null): InstrumentDefinition {
+  return addition ? { ...core, pages: [...core.pages, ...addition.pages] } : core;
+}
+
+/**
  * Cross-reference checks the schema alone cannot express. A draft may be saved
  * with issues; publishing requires none.
  */
-export function validateDefinition(definition: InstrumentDefinition): DefinitionIssue[] {
-  const issues: DefinitionIssue[] = [];
+export function validateDefinition(definition: InstrumentDefinition, kind: DefinitionKind = "core"): DefinitionIssue[] {
+  const issues: DefinitionIssue[] = kindIssues(definition, kind);
   const questions = allQuestions(definition);
 
   if (questions.length === 0) issues.push({ path: "pages", message: "Add at least one question" });

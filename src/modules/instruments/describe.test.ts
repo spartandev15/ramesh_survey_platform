@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { demoDefinition } from "./demo-definition";
-import { allQuestions, type Question } from "./definition";
+import type { Question } from "./definition";
+import { allQuestions } from "./questions";
 import { describeCondition, formatAnswer } from "./describe";
 
 const q = (id: string) => allQuestions(demoDefinition).find((x) => x.id === id) as Question;

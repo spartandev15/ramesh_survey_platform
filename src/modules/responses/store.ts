@@ -1,10 +1,14 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { accessToken, instrumentVersion, invitation, responseRevision, shop, surveyResponse } from "@/db/schema";
+import { accessToken, instrument, instrumentVersion, invitation, responseRevision, shop, shopSurveySettings, surveyResponse } from "@/db/schema";
 import { recordAudit } from "@/modules/audit/audit";
+import { raiseForSubmission } from "@/modules/cases/store";
+import { cancelAfterSubmission } from "@/modules/email-ledger/store";
+import { placeForVisit } from "./placement";
 import { definitionHash } from "@/modules/instruments/canonical";
-import { parseDefinition, type InstrumentDefinition } from "@/modules/instruments/definition";
+import type { InstrumentDefinition } from "@/modules/instruments/definition";
+import { loadSurvey } from "@/modules/instruments/survey";
 import { evaluateAnswers, evaluateSubmission, type AnswerError, type Answers, type Outcomes } from "@/modules/instruments/evaluate";
 import { generateToken, hashToken } from "./tokens";
 
@@ -39,20 +43,31 @@ export async function createTestInvitation(
   input: { shopId: string; instrumentVersionId: string; lifetimeDays: number; now?: Date },
 ): Promise<{ invitationId: string; token: string; expiresAt: Date }> {
   const [version] = await tx
-    .select({ id: instrumentVersion.id, status: instrumentVersion.status })
+    .select({ id: instrumentVersion.id, status: instrumentVersion.status, ownerShopId: instrument.shopId })
     .from(instrumentVersion)
+    .innerJoin(instrument, eq(instrument.id, instrumentVersion.instrumentId))
     .where(eq(instrumentVersion.id, input.instrumentVersionId));
   // Invitations pin a published, immutable version (SR-15); drafts can still change.
   if (!version || version.status !== "published") throw new ResponseConflictError("Only published survey versions can be sent");
-  const [target] = await tx.select({ id: shop.id }).from(shop).where(eq(shop.id, input.shopId));
+  const [target] = await tx.select({ id: shop.id, coreVersionId: shopSurveySettings.instrumentVersionId, additionVersionId: shopSurveySettings.additionVersionId }).from(shop).leftJoin(shopSurveySettings, eq(shopSurveySettings.shopId, shop.id)).where(eq(shop.id, input.shopId));
   if (!target) throw new ResponseConflictError("Unknown shop");
+
+  // A shop's questions are tested after that shop's core survey; a core version with the shop's current questions (SR-45).
+  let versions: { instrumentVersionId: string; additionVersionId: string | null };
+  if (version.ownerShopId) {
+    if (version.ownerShopId !== target.id) throw new ResponseConflictError("These questions belong to another shop");
+    if (!target.coreVersionId) throw new ResponseConflictError("Assign the shop's core survey version first");
+    versions = { instrumentVersionId: target.coreVersionId, additionVersionId: version.id };
+  } else {
+    versions = { instrumentVersionId: version.id, additionVersionId: target.additionVersionId };
+  }
 
   const now = input.now ?? new Date();
   const expiresAt = new Date(now.getTime() + input.lifetimeDays * 24 * 60 * 60 * 1000);
   const token = generateToken();
   const [created] = await tx
     .insert(invitation)
-    .values({ shopId: input.shopId, instrumentVersionId: version.id, isTest: true, createdBy: actor.type === "user" ? actor.userId : null, createdAt: now })
+    .values({ shopId: input.shopId, ...versions, isTest: true, createdBy: actor.type === "user" ? actor.userId : null, createdAt: now })
     .returning({ id: invitation.id });
   await tx.insert(accessToken).values({ invitationId: created.id, tokenHash: hashToken(token), issuedAt: now, expiresAt });
 
@@ -65,7 +80,7 @@ export async function createTestInvitation(
       subjectType: "invitation",
       subjectId: created.id,
       // Never the token itself (PDF: no secrets in logs or audit).
-      after: { instrumentVersionId: version.id, expiresAt: expiresAt.toISOString(), isTest: true },
+      after: { ...versions, expiresAt: expiresAt.toISOString(), isTest: true },
     },
     tx,
   );
@@ -78,9 +93,14 @@ export async function createTestInvitation(
 
 export interface SurveyContext {
   invitationId: string;
+  /** The imported repair visit; null for PSG test links. */
+  visitId: string | null;
   isTest: boolean;
   shop: { id: string; name: string; logoUrl: string | null; brandColor: string | null };
   version: { id: string; definitionHash: string };
+  /** The shop's own questions pinned on the invitation, if any (SR-45). */
+  additionVersionId: string | null;
+  /** Core pages then the shop's pages; scored by the core rules only. */
   definition: InstrumentDefinition;
   expiresAt: Date;
 }
@@ -104,25 +124,23 @@ async function resolve(tx: Tx, token: string, now: Date, lock: boolean): Promise
       revokedAt: accessToken.revokedAt,
       invitationId: invitation.id,
       isTest: invitation.isTest,
+      visitId: invitation.visitId,
       shopId: shop.id,
       shopName: shop.name,
       logoUrl: shop.logoUrl,
       brandColor: shop.brandColor,
-      versionId: instrumentVersion.id,
-      versionHash: instrumentVersion.definitionHash,
-      definition: instrumentVersion.definition,
+      versionId: invitation.instrumentVersionId,
+      additionVersionId: invitation.additionVersionId,
     })
     .from(accessToken)
     .innerJoin(invitation, eq(invitation.id, accessToken.invitationId))
     .innerJoin(shop, eq(shop.id, invitation.shopId))
-    .innerJoin(instrumentVersion, eq(instrumentVersion.id, invitation.instrumentVersionId))
     .where(eq(accessToken.tokenHash, hashToken(token)));
   // Lock the invitation so concurrent saves and submits for it serialize.
   const [row] = lock ? await query.for("update", { of: invitation }) : await query;
   if (!row || row.revokedAt) return null;
 
-  const parsed = parseDefinition(row.definition);
-  if (!parsed.ok || !row.versionHash) throw new Error(`Instrument version ${row.versionId} is not a readable published version`);
+  const survey = await loadSurvey(tx, row.versionId, row.additionVersionId);
 
   const [response] = await tx
     .select()
@@ -133,9 +151,11 @@ async function resolve(tx: Tx, token: string, now: Date, lock: boolean): Promise
     context: {
       invitationId: row.invitationId,
       isTest: row.isTest,
+      visitId: row.visitId,
       shop: { id: row.shopId, name: row.shopName, logoUrl: row.logoUrl, brandColor: row.brandColor },
-      version: { id: row.versionId, definitionHash: row.versionHash },
-      definition: parsed.definition,
+      version: { id: row.versionId, definitionHash: survey.core.definitionHash },
+      additionVersionId: row.additionVersionId,
+      definition: survey.definition,
       expiresAt: row.tokenExpiresAt,
     },
     tokenExpired: row.tokenExpiresAt.getTime() <= now.getTime(),
@@ -199,6 +219,7 @@ export async function saveDraft(tx: Tx, token: string, expectedRevision: number,
       invitationId: context.invitationId,
       shopId: context.shop.id,
       instrumentVersionId: context.version.id,
+      additionVersionId: context.additionVersionId,
       source: "online",
       isTest: context.isTest,
       draftAnswers: evaluated.answers,
@@ -240,11 +261,13 @@ export async function submitResponse(tx: Tx, token: string, requestKey: string, 
   if (resolved.tokenExpired) return { ok: false, reason: "expired" };
   if (!evaluated.ok) return { ok: false, reason: "invalid", errors: evaluated.errors };
 
+  // First committed submission for the visit is the counted one (SR-19).
+  const placement = await placeForVisit(tx, context.visitId);
   let responseId = response?.id;
   if (!responseId) {
     const [created] = await tx
       .insert(surveyResponse)
-      .values({ invitationId: context.invitationId, shopId: context.shop.id, instrumentVersionId: context.version.id, source: "online", isTest: context.isTest })
+      .values({ invitationId: context.invitationId, shopId: context.shop.id, instrumentVersionId: context.version.id, additionVersionId: context.additionVersionId, source: "online", isTest: context.isTest })
       .returning({ id: surveyResponse.id });
     responseId = created.id;
   }
@@ -260,8 +283,12 @@ export async function submitResponse(tx: Tx, token: string, requestKey: string, 
   });
   await tx
     .update(surveyResponse)
-    .set({ status: "submitted", submittedAt: now, submitRequestKey: requestKey, submitPayloadHash: payloadHash, draftAnswers: evaluated.answers })
+    .set({ status: "submitted", submittedAt: now, submitRequestKey: requestKey, submitPayloadHash: payloadHash, draftAnswers: evaluated.answers, visitId: context.visitId, ...placement })
     .where(eq(surveyResponse.id, responseId));
+  // No reminder or renewal after a submission (SR-24, AT-24).
+  await cancelAfterSubmission(tx, context.invitationId, now);
+  // Negative feedback and suppression work are queued in the same transaction (PDF 04, boundary 3).
+  await raiseForSubmission(tx, responseId, now);
 
   await recordAudit(
     {
@@ -317,7 +344,8 @@ export async function listTestInvitations(tx: Tx, instrumentVersionId: string, l
     .innerJoin(accessToken, eq(accessToken.invitationId, invitation.id))
     .leftJoin(surveyResponse, and(eq(surveyResponse.invitationId, invitation.id), eq(surveyResponse.source, "online")))
     .leftJoin(responseRevision, and(eq(responseRevision.responseId, surveyResponse.id), eq(responseRevision.revision, 1)))
-    .where(and(eq(invitation.instrumentVersionId, instrumentVersionId), eq(invitation.isTest, true)))
+    // A shop's questions are tested as the addition to its core survey (SR-45).
+    .where(and(or(eq(invitation.instrumentVersionId, instrumentVersionId), eq(invitation.additionVersionId, instrumentVersionId)), eq(invitation.isTest, true)))
     .orderBy(desc(invitation.createdAt))
     .limit(limit);
 
@@ -372,7 +400,7 @@ export async function getResponseDetail(tx: Tx, responseId: string): Promise<Res
       versionNumber: instrumentVersion.version,
       versionHash: instrumentVersion.definitionHash,
       versionIsTest: instrumentVersion.isTest,
-      definition: instrumentVersion.definition,
+      additionVersionId: surveyResponse.additionVersionId,
     })
     .from(surveyResponse)
     .innerJoin(instrumentVersion, eq(instrumentVersion.id, surveyResponse.instrumentVersionId))
@@ -387,8 +415,8 @@ export async function getResponseDetail(tx: Tx, responseId: string): Promise<Res
     .where(eq(responseRevision.responseId, responseId))
     .orderBy(desc(responseRevision.revision))
     .limit(1);
-  const parsed = parseDefinition(row.definition);
-  if (!revision || !parsed.ok) return null;
+  if (!revision) return null;
+  const survey = await loadSurvey(tx, row.versionId, row.additionVersionId);
 
   return {
     responseId: row.responseId,
@@ -398,7 +426,7 @@ export async function getResponseDetail(tx: Tx, responseId: string): Promise<Res
     shopName: row.shopName,
     submittedAt: row.submittedAt,
     version: { id: row.versionId, number: row.versionNumber, definitionHash: row.versionHash, isTest: row.versionIsTest },
-    definition: parsed.definition,
+    definition: survey.definition,
     revision: {
       number: revision.revision,
       answers: revision.answers as Answers,

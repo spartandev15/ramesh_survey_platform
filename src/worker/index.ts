@@ -4,15 +4,34 @@
  * to run concurrently and after process restarts").
  *
  *   npm run worker
- *
- * Email dispatch, reminders and reconciliation jobs register here as they ship.
  */
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { PgBoss } from "pg-boss";
+import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { emailTransport } from "@/modules/email";
+import { configuredAdapter } from "@/modules/bridge/adapter";
+import { runBridgeCycle } from "@/modules/bridge/sync";
+import { runDispatchCycle, runReminderScheduler } from "@/modules/email-ledger/dispatcher";
+import { opsRecipients, runDailyReport, runHealthCheck, type Notify } from "@/modules/monitoring/monitoring";
 
 const QUEUES = {
   heartbeat: "system.heartbeat",
+  // Sends due survey emails; the ledger, not the queue, guarantees one send per intent.
+  emailDispatch: "email.dispatch",
+  // Creates the single reminder per invitation once its delay has passed (SR-24).
+  emailReminders: "email.reminders",
+  // Outbound copy of required Hub records to FileMaker; does nothing until it is set up and switched on (SR-41).
+  bridgeSync: "bridge.sync",
+  // Emails PSG operations when sending is stuck or failing (PDF 09: within 15 minutes).
+  opsHealth: "ops.health",
+  // Daily reconciliation counts for PSG operations (PDF 09); sends once a day.
+  opsDaily: "ops.daily",
 } as const;
+
+// Identifies this process on claimed intents, so a lease can only be settled by its owner.
+const WORKER_ID = `${hostname()}:${process.pid}:${randomUUID().slice(0, 8)}`;
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
@@ -22,20 +41,50 @@ async function main() {
   boss.on("error", (error) => logger.error({ err: error }, "pg-boss error"));
   await boss.start();
 
-  await boss.createQueue(QUEUES.heartbeat);
+  for (const queue of Object.values(QUEUES)) await boss.createQueue(queue);
   await boss.schedule(QUEUES.heartbeat, "* * * * *");
+  await boss.schedule(QUEUES.emailDispatch, "* * * * *");
+  await boss.schedule(QUEUES.emailReminders, "*/5 * * * *");
+  await boss.schedule(QUEUES.opsHealth, "*/5 * * * *");
+  await boss.schedule(QUEUES.opsDaily, "5 * * * *");
+  // No FileMaker connection yet (G-09): no bridge job at all, rather than an empty one every minute.
+  if (configuredAdapter()) await boss.schedule(QUEUES.bridgeSync, "* * * * *");
+  else await boss.unschedule(QUEUES.bridgeSync);
+
   await boss.work(QUEUES.heartbeat, async () => {
     logger.debug("worker heartbeat");
   });
+  await boss.work(QUEUES.emailDispatch, async () => {
+    const summary = await runDispatchCycle(emailTransport(), WORKER_ID);
+    if (Object.values(summary).some((n) => n > 0)) logger.info({ summary }, "email dispatch cycle");
+  });
+  await boss.work(QUEUES.emailReminders, async () => {
+    const created = await runReminderScheduler();
+    if (created > 0) logger.info({ created }, "reminders scheduled");
+  });
+  await boss.work(QUEUES.bridgeSync, async () => {
+    const summary = await runBridgeCycle(configuredAdapter(), WORKER_ID);
+    if (summary.queued > 0 || summary.confirmed > 0 || summary.errors > 0 || summary.conflicts > 0) logger.info({ summary }, "bridge cycle");
+  });
 
-  logger.info({ queues: Object.values(QUEUES) }, "worker started");
+  const notify: Notify = { transport: emailTransport(), recipients: opsRecipients(env().OPS_ALERT_EMAILS), appUrl: env().APP_URL.replace(/\/$/, "") };
+  if (notify.recipients.length === 0) logger.warn("OPS_ALERT_EMAILS is not set: operations notices go to the log only");
+  await boss.work(QUEUES.opsHealth, async () => {
+    const sent = await runHealthCheck(notify);
+    if (sent.length > 0) logger.info({ sent }, "operations notices");
+  });
+  await boss.work(QUEUES.opsDaily, async () => {
+    if (await runDailyReport(notify)) logger.info("daily counts report sent");
+  });
+
+  logger.info({ queues: Object.values(QUEUES), workerId: WORKER_ID }, "worker started");
 
   let stopping = false;
   const shutdown = async (signal: string) => {
     if (stopping) return;
     stopping = true;
     logger.info({ signal }, "worker stopping");
-    // Let in-flight jobs finish; unfinished jobs are retried by another worker.
+    // Let in-flight jobs finish; an interrupted send becomes acceptance-unknown, never a blind resend.
     await boss.stop({ graceful: true, timeout: 30_000 });
     process.exit(0);
   };

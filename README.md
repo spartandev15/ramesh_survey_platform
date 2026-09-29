@@ -6,7 +6,7 @@ Shop-branded customer survey platform for Phoenix Solutions Group, built to the
 ## Stack
 
 Node.js 24, TypeScript, Next.js 16 (web + API), PostgreSQL 17, Drizzle ORM,
-Better Auth, pg-boss (background jobs), Zod, React Hook Form, Tailwind CSS,
+Better Auth, pg-boss (background jobs), Zod (server validation), Tailwind CSS,
 Vitest. Deployed as one Docker image that runs as `web`, `worker` or `migrate`.
 
 ## Local setup
@@ -42,13 +42,23 @@ server log instead of being sent.
 | `npm run db:migrate` | Apply migrations |
 | `npm run create-admin` | Create or promote a PSG administrator |
 | `npm run seed:demo` | Load the demo survey and publish it as a test version |
+| `npm run seed:dashboard` | Six months of dummy responses in an internal test shop, for demos and training |
+| `npm run load-test` | Load and correctness check against an internal test shop (SR-48) |
+| `npm run restore-drill` | Back up, restore into an empty drill database and verify (needs `DRILL_DATABASE_URL`) |
+
+## Documentation
+
+- [Operations runbook](docs/operations-runbook.md): configuration, monitoring, the daily operating loop, launch, pause, backup and the FileMaker bridge
+- [User guide](docs/user-guide.md): for PSG staff and shop users
+- [Requirement traceability](docs/traceability.md): every SR, its status and the tests that prove it
+- [Open items and proposals](docs/open-items.md): gates waiting on PSG and the working assumptions to confirm
 
 ## Browser tests
 
 `npm run test:e2e` drives the real app in Google Chrome: a PSG admin builds,
 previews and publishes a survey, issues a test link, completes it as a signed-out
 respondent on a phone viewport, and checks the scored result. Start the app
-first (`npm run dev`), load the demo survey once (`npm run seed:demo`), then:
+first on a production build (`npm run build && npm run start`; dev mode is too slow for the full suite), load the demo survey once (`npm run seed:demo`), then:
 
 ```bash
 E2E_EMAIL=you@example.com E2E_PASSWORD=... npm run test:e2e
@@ -70,13 +80,24 @@ src/
     access/         Roles, capabilities, tenant checks
     audit/          Append-only audit log
     auth/           Better Auth setup
-    instruments/    Survey definitions, versioning and the server-side evaluator
-    responses/      Invitations, access tokens, autosave and submission
+    bridge/         FileMaker bridge: outbox, read-back, conflicts, retirement (R2)
+    cases/          Negative-alert review, follow-up and the suppression queue
+    dashboard/      Dashboard cohort, scores, chart data and CSV export
     email/          Provider adapters (log, SendGrid)
-    shops/          Shop management
+    email-ledger/   One send per intent, reminders, renewals, opt-outs, webhook events
+    imports/        CSV import, dry-run preview and commit
+    instruments/    Survey definitions, versioning and the server-side evaluator
+    invitations/    Invitation queue and printable links
+    legacy-cases/   Handoff of unresolved cases from the old system
+    monitoring/     Operations notices and the daily counts email
+    operations/     Operator queues and system health
+    readiness/      Per-shop launch checklist
+    responses/      Access tokens, autosave, submission, paper, public form, matching
+    shops/          Shops, settings, members and modes
   worker/           Background job process
 drizzle/            Committed SQL migrations
-scripts/            migrate, create-admin
+scripts/            migrate, create-admin, demo data, load test, restore drill
+docs/               runbook, user guide, traceability, open items
 ```
 
 ## Rules that keep the system safe

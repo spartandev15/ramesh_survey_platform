@@ -4,15 +4,14 @@
  * handling of altered links. SR-12, SR-16, SR-17, SR-39; AT-12, AT-16, AT-17.
  */
 import { expect, test } from "@playwright/test";
-import { adminCredentials, createTestLink, ensureTestShop, respondentPhone, signIn } from "./helpers";
+import { adminCredentials, createTestLink, ensureTestShop, openDemoSurvey, respondentPhone, signIn } from "./helpers";
 
 test.skip(!adminCredentials(), "Set E2E_EMAIL and E2E_PASSWORD to run browser tests");
 
 test("respondent can resume, is guided through errors, and submits exactly once", async ({ page, browser }) => {
   await signIn(page);
   await ensureTestShop(page);
-  await page.goto("/psg/instruments");
-  await page.getByRole("link", { name: "Demo survey (TEST)" }).click();
+  await openDemoSurvey(page);
   const url = await createTestLink(page);
 
   const phone = await respondentPhone(browser);
@@ -50,9 +49,9 @@ test("respondent can resume, is guided through errors, and submits exactly once"
 
   // Double click submits once and locks the survey (SR-17)
   await phone.getByRole("button", { name: "Submit survey" }).dblclick();
-  await expect(phone.getByText("Thank you for your feedback")).toBeVisible();
+  await expect(phone.getByRole("heading", { name: "Thank you for your feedback" })).toBeVisible();
   await phone.reload();
-  await expect(phone.getByText("Thank you for your feedback")).toBeVisible();
+  await expect(phone.getByRole("heading", { name: "Thank you for your feedback" })).toBeVisible();
   await expect(phone.locator("form")).toHaveCount(0);
 
   // An altered link reveals nothing (AT-12)

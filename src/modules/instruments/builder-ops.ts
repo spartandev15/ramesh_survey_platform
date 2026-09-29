@@ -2,7 +2,8 @@
  * Pure helpers behind the survey builder UI (SR-44). Kept separate from React
  * so the editing rules are unit-tested.
  */
-import { allQuestions, type Choice, type ComparableValue, type Condition, type InstrumentDefinition, type Question, type QuestionType } from "./definition";
+import type { Choice, ComparableValue, Condition, InstrumentDefinition, Question, QuestionType } from "./definition";
+import { allQuestions } from "./questions";
 
 /** Next free id like `question_3`, never reusing an existing one. */
 export function uniqueId(base: string, taken: Iterable<string>): string {
@@ -12,16 +13,6 @@ export function uniqueId(base: string, taken: Iterable<string>): string {
     const candidate = `${stem}_${n}`.slice(0, 63);
     if (!used.has(candidate)) return candidate;
   }
-}
-
-export function definitionIds(definition: InstrumentDefinition) {
-  return {
-    pages: definition.pages.map((p) => p.id),
-    questions: allQuestions(definition).map((q) => q.id),
-    metrics: definition.metrics.map((m) => m.id),
-    alerts: definition.alerts.map((a) => a.id),
-    suppressions: definition.suppressions.map((s) => s.id),
-  };
 }
 
 const defaultChoices = (): Choice[] => [
@@ -57,8 +48,9 @@ function typeFields(type: QuestionType) {
   }
 }
 
-export function newQuestion(type: QuestionType, takenIds: Iterable<string>): Question {
-  return { id: uniqueId("question", takenIds), title: "Untitled question", required: false, ...typeFields(type) } as Question;
+/** `idPrefix` is "add_" for a shop's own questions (SR-45), so new ids never collide with the core. */
+export function newQuestion(type: QuestionType, takenIds: Iterable<string>, idPrefix = ""): Question {
+  return { id: uniqueId(`${idPrefix}question`, takenIds), title: "Untitled question", required: false, ...typeFields(type) } as Question;
 }
 
 /**
@@ -104,7 +96,7 @@ export type ConditionOp = LeafCondition["op"];
 /** What the builder's condition editor can show: none, one clause, or clauses joined by all/any. */
 export type EditableCondition = { join: "all" | "any"; clauses: LeafCondition[] };
 
-export function isLeaf(condition: Condition): condition is LeafCondition {
+function isLeaf(condition: Condition): condition is LeafCondition {
   return !("all" in condition) && !("any" in condition) && !("not" in condition);
 }
 

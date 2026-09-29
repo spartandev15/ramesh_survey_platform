@@ -24,7 +24,8 @@ export const CAPABILITIES = [
   "alert.review", // review, approve and send negative alerts (SR-32, SR-33)
   "case.resolve", // final resolution (SR-34)
   "suppression.acknowledge", // manual FileMaker suppression queue (SR-36)
-  "operations.view", // operator queues (SR-38)
+  "operations.view", // operator queues and taking ownership of an item (SR-38)
+  "operations.manage", // record the review of a background worker failure (SR-38)
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -39,6 +40,7 @@ const ROLE_CAPABILITIES: Record<PsgRole, readonly Capability[]> = {
     "match.manage",
     "suppression.acknowledge",
     "operations.view",
+    "operations.manage",
   ],
   psg_reviewer: ["psg.workspace", "alert.review", "case.resolve", "operations.view"],
 };

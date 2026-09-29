@@ -10,6 +10,19 @@ import { defineConfig } from "@playwright/test";
  * They create TEST data that cannot be deleted (published versions are
  * immutable), so point them at a development database, never production.
  */
+// Local test account credentials, if present (gitignored). Explicit env vars win.
+try {
+  if (!process.env.E2E_EMAIL) process.loadEnvFile(".env.e2e.local");
+} catch {
+  // No local file: tests that need sign-in are skipped.
+}
+// The app's own settings, for tests that inspect the database (DATABASE_URL) or sign links.
+try {
+  if (!process.env.DATABASE_URL) process.loadEnvFile(".env");
+} catch {
+  // No .env: database-backed browser tests are skipped.
+}
+
 export default defineConfig({
   testDir: "e2e",
   // Dev mode compiles each route on first visit.

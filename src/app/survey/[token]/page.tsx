@@ -5,6 +5,7 @@ import { clientAddress } from "@/lib/rate-limit";
 import { openSurvey, RateLimitedError } from "@/modules/responses/respondent";
 import type { SurveyContext, TokenState } from "@/modules/responses/store";
 import { ShopHeader } from "../shop-header";
+import { RenewalButton } from "./renewal-button";
 import { RespondentForm } from "./respondent-form";
 
 // No indexing, no referrer, no third-party scripts on respondent pages (PDF 04).
@@ -52,7 +53,7 @@ export default async function SurveyPage({ params }: PageProps<"/survey/[token]"
             </>
           )}
           {state.state === "submitted" && <Submitted context={context} submittedAt={state.submittedAt} />}
-          {state.state === "expired" && <Expired context={context} />}
+          {state.state === "expired" && <Expired context={context} token={token} />}
         </div>
       </main>
     </div>
@@ -73,16 +74,19 @@ function Submitted({ context, submittedAt }: { context: SurveyContext; submitted
 }
 
 /**
- * Expired and unanswered: no access to the content (SR-21). Renewal by email
- * to the address on record (SR-22) arrives with imported invitations, which
- * carry the customer's email; test links have no recipient to email.
+ * Expired and unanswered: no access to the content (SR-21). The respondent may
+ * ask for a new link to the address on record; the reply is the same either way (SR-22).
  */
-function Expired({ context }: { context: SurveyContext }) {
+function Expired({ context, token }: { context: SurveyContext; token: string }) {
   return (
     <div className="flex flex-col items-center py-6 text-center">
       <Clock aria-hidden="true" className="size-12 text-amber-600" />
       <h1 className="mt-4 text-2xl font-semibold text-brand-navy-900">This survey link has expired</h1>
-      <p className="mt-2 max-w-md text-gray-600">For a new link, please contact {context.shop.name}.</p>
+      <p className="mt-2 max-w-md text-gray-600">
+        You can still share your feedback with {context.shop.name}. We can email a new link to the address on file for your visit. Any answers you saved are kept.
+      </p>
+      <RenewalButton token={token} />
+      <p className="mt-4 max-w-md text-xs text-gray-500">If no email arrives, please contact {context.shop.name}.</p>
     </div>
   );
 }

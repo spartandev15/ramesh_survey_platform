@@ -1,10 +1,11 @@
 import "server-only";
-import { asc, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { shop } from "@/db/schema";
+import { shop, shopSurveySettings } from "@/db/schema";
 import { isPsgStaff } from "@/modules/access/capabilities";
 import { requireCapability, requireShopRead, requireUser } from "@/modules/access/principal";
 import { recordAudit } from "@/modules/audit/audit";
+import { insertDefaultSettings } from "./settings-store";
 import type { ShopInput } from "./validation";
 
 export type ShopRow = typeof shop.$inferSelect;
@@ -24,7 +25,11 @@ export async function listVisibleShops(): Promise<ShopRow[]> {
     return db.select().from(shop).where(isNull(shop.archivedAt)).orderBy(asc(shop.name));
   }
   if (principal.shopIds.length === 0) return [];
-  return db.select().from(shop).where(inArray(shop.id, [...principal.shopIds])).orderBy(asc(shop.name));
+  return db
+    .select()
+    .from(shop)
+    .where(and(inArray(shop.id, [...principal.shopIds]), isNull(shop.archivedAt)))
+    .orderBy(asc(shop.name));
 }
 
 export async function getShop(shopId: string): Promise<ShopRow | null> {
@@ -48,6 +53,7 @@ export async function createShop(input: ShopInput): Promise<ShopRow> {
         .insert(shop)
         .values({ name: input.name, publicSlug: input.publicSlug, timezone: input.timezone, isTestShop: input.isTestShop })
         .returning();
+      await insertDefaultSettings(tx, created.id);
       await recordAudit(
         {
           actorType: "user",
@@ -71,4 +77,55 @@ export async function createShop(input: ShopInput): Promise<ShopRow> {
 function isUniqueViolation(error: unknown, constraint: string): boolean {
   const e = (error as { cause?: unknown })?.cause ?? error;
   return (e as { code?: string })?.code === "23505" && (e as { constraint?: string })?.constraint === constraint;
+}
+
+export class ShopDeleteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ShopDeleteError";
+  }
+}
+
+/**
+ * Deletes a shop from every list and screen. The package keeps every record
+ * (PDF 09: "Do not delete records"), so the shop is archived: its responses,
+ * cases, emails and audit history stay and it can no longer be used. A Live
+ * shop must be paused first, and nothing may still be waiting to send.
+ */
+export async function deleteShop(shopId: string): Promise<{ name: string }> {
+  const { principal } = await requireCapability("shop.manage");
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select({ shop, mode: shopSurveySettings.mode })
+      .from(shop)
+      .leftJoin(shopSurveySettings, eq(shopSurveySettings.shopId, shop.id))
+      .where(eq(shop.id, shopId))
+      .for("update", { of: shop });
+    if (!row || row.shop.archivedAt) throw new ShopDeleteError("This shop was already deleted.");
+    if (row.mode === "live") throw new ShopDeleteError("This shop is Live. Pause it on its page first, then delete it.");
+    const waiting = await tx.execute<{ n: number }>(sql`
+      SELECT count(*)::int AS n FROM email_intent e
+      LEFT JOIN invitation i ON i.id = e.invitation_id
+      LEFT JOIN alert_approval ap ON ap.id = e.alert_approval_id
+      LEFT JOIN alert_case c ON c.id = ap.case_id
+      WHERE e.state IN ('queued', 'held', 'sending') AND (i.shop_id = ${shopId} OR c.shop_id = ${shopId})`);
+    const n = Number(waiting.rows[0]?.n ?? 0);
+    if (n > 0) throw new ShopDeleteError(`${n} email${n === 1 ? " is" : "s are"} still waiting to send for this shop. Settle them in Email review first.`);
+    const now = new Date();
+    await tx.update(shop).set({ archivedAt: now }).where(eq(shop.id, shopId));
+    await recordAudit(
+      {
+        actorType: "user",
+        actorUserId: principal.userId,
+        shopId,
+        action: "shop.deleted",
+        subjectType: "shop",
+        subjectId: shopId,
+        before: { name: row.shop.name, mode: row.mode },
+        after: { archivedAt: now.toISOString(), recordsKept: true },
+      },
+      tx,
+    );
+    return { name: row.shop.name };
+  });
 }

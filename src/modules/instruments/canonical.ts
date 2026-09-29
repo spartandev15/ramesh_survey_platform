@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 /** JSON with object keys sorted, so equal definitions always serialize identically. */
-export function canonicalJson(value: unknown): string {
+function canonicalJson(value: unknown): string {
   return JSON.stringify(sortKeys(value));
 }
 

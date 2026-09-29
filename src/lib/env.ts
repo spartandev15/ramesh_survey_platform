@@ -10,6 +10,10 @@ const envSchema = z
     EMAIL_PROVIDER: z.enum(["log", "sendgrid"]).default("log"),
     EMAIL_FROM: z.email(),
     SENDGRID_API_KEY: z.string().optional(),
+    // Base64 public key from SendGrid Event Webhook settings; without it the webhook refuses all requests.
+    SENDGRID_WEBHOOK_PUBLIC_KEY: z.string().optional(),
+    // PSG staff who get queue-health notices and the daily reconciliation (PDF 09), comma separated. Unset: notices are only logged.
+    OPS_ALERT_EMAILS: z.string().optional(),
     LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
   })
   .refine((e) => e.EMAIL_PROVIDER !== "sendgrid" || !!e.SENDGRID_API_KEY, {

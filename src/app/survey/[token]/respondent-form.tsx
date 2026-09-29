@@ -4,7 +4,8 @@ import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QuestionField } from "@/components/survey/question-field";
-import { allQuestions, type InstrumentDefinition } from "@/modules/instruments/definition";
+import type { InstrumentDefinition } from "@/modules/instruments/definition";
+import { allQuestions } from "@/modules/instruments/questions";
 import { evaluateAnswers, evaluateCondition, evaluateSubmission, type AnswerValue, type Answers } from "@/modules/instruments/evaluate";
 import { saveDraftAction, submitAction } from "./actions";
 

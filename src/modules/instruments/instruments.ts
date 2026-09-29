@@ -33,15 +33,16 @@ export async function getInstrument(instrumentId: string) {
   return getDb().transaction((tx) => store.findInstrument(tx, id));
 }
 
-export async function getVersion(versionId: string) {
-  await actingUser("psg.workspace");
-  const id = requireId(versionId);
-  return getDb().transaction((tx) => store.findVersion(tx, id));
-}
-
 export async function createInstrument(input: InstrumentInput) {
   const actor = await actingUser("instrument.manage");
   return getDb().transaction((tx) => store.insertInstrument(tx, actor, input, emptyDefinition()));
+}
+
+/** The shop's own questions survey, created on first use (SR-45). PSG controls it; shops only request changes. */
+export async function openShopAddition(shopId: string) {
+  const actor = await actingUser("instrument.manage");
+  const id = requireId(shopId);
+  return getDb().transaction((tx) => store.createShopAddition(tx, actor, id));
 }
 
 export async function saveDraft(versionId: string, expectedRevision: number, definition: unknown, sourceNote?: string | null) {

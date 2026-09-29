@@ -1,6 +1,6 @@
-import type { InputHTMLAttributes } from "react";
+import type { ComponentProps } from "react";
 
-interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
+interface TextFieldProps extends ComponentProps<"input"> {
   id: string;
   label: string;
   error?: string;

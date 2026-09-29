@@ -14,15 +14,3 @@ export const shopInputSchema = z.object({
 });
 
 export type ShopInput = z.infer<typeof shopInputSchema>;
-
-/** Suggest a public slug from a shop name, e.g. "Joe's Body Shop" -> "joes-body-shop". */
-export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
