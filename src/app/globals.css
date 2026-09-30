@@ -7,7 +7,11 @@
   --color-brand-navy-700: #00335e;
   --color-brand-red: #be3134;
   --color-brand-red-dark: #9e2629;
-  --color-surface: #f4f6f9;
+  --color-surface: #f5f6fb;
+  /* Workspace sidebar: deep navy, indigo for the current page. */
+  --color-sidebar: #161a33;
+  --color-sidebar-active: #5a57e6;
+  --color-sidebar-muted: #7d84a8;
   /* Chart palette: calm, colour-blind-safe pairs; never colour alone (labels always shown). */
   --color-chart-counted: #0d9488;
   --color-chart-total: #4f46e5;
@@ -27,6 +31,12 @@ body {
     var(--color-surface);
   background-attachment: fixed;
   color: #1f2937;
+}
+
+/* A thin, quiet scrollbar for the dark sidebar. */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.15) transparent;
 }
 
 /* Visible keyboard focus everywhere (SR-39). */

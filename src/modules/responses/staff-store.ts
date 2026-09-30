@@ -502,7 +502,19 @@ export async function correctResponse(tx: Tx, actor: Actor, responseId: string, 
 
 export type MatchStatus = (typeof surveyResponse.$inferSelect)["matchStatus"];
 
-type ResponseFilters = { shopId?: string; matchStatus?: MatchStatus; source?: "online" | "paper" | "public" };
+export type ResponseFilters = {
+  shopId?: string;
+  matchStatus?: MatchStatus;
+  source?: "online" | "paper" | "public";
+  /** Matched responses only: counted (canonical) or not counted (duplicate or legacy reference). */
+  counted?: boolean;
+  /** Words in the shop name, visit ID, customer name or repair order the respondent gave. */
+  q?: string;
+  /** Submitted within this many days. */
+  sinceDays?: number;
+  /** Exactly these responses, e.g. the rows ticked for export. */
+  ids?: string[];
+};
 
 const responsesWhere = (filters: ResponseFilters) =>
   and(
@@ -510,29 +522,53 @@ const responsesWhere = (filters: ResponseFilters) =>
     filters.shopId ? eq(surveyResponse.shopId, filters.shopId) : undefined,
     filters.matchStatus ? eq(surveyResponse.matchStatus, filters.matchStatus) : undefined,
     filters.source ? eq(surveyResponse.source, filters.source) : undefined,
+    filters.counted === undefined ? undefined : and(eq(surveyResponse.matchStatus, "matched"), eq(surveyResponse.canonical, filters.counted)),
+    filters.sinceDays ? sql`${surveyResponse.submittedAt} >= now() - make_interval(days => ${filters.sinceDays})` : undefined,
+    filters.ids ? inArray(surveyResponse.id, filters.ids.length ? filters.ids : ["00000000-0000-0000-0000-000000000000"]) : undefined,
+    ...(filters.q ?? "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => {
+        // LIKE wildcards typed by the user match literally.
+        const like = `%${word.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        return or(
+          ilike(shop.name, like),
+          ilike(repairVisit.sourceVisitKey, like),
+          sql`${surveyResponse.respondentContext}->>'name' ILIKE ${like}`,
+          sql`${surveyResponse.respondentContext}->>'repairOrder' ILIKE ${like}`,
+        );
+      }),
   );
 
 export async function countResponses(tx: Tx, filters: ResponseFilters) {
-  const [row] = await tx.select({ n: count() }).from(surveyResponse).where(responsesWhere(filters));
+  const [row] = await tx
+    .select({ n: count() })
+    .from(surveyResponse)
+    .leftJoin(shop, eq(shop.id, surveyResponse.shopId))
+    .leftJoin(repairVisit, eq(repairVisit.id, surveyResponse.visitId))
+    .where(responsesWhere(filters));
   return row.n;
 }
 
+const listColumns = {
+  id: surveyResponse.id,
+  source: surveyResponse.source,
+  submittedAt: surveyResponse.submittedAt,
+  receivedOn: surveyResponse.receivedOn,
+  isTest: surveyResponse.isTest,
+  matchStatus: surveyResponse.matchStatus,
+  canonical: surveyResponse.canonical,
+  duplicateDisposition: surveyResponse.duplicateDisposition,
+  shopName: shop.name,
+  shopTimezone: shop.timezone,
+  sourceVisitKey: repairVisit.sourceVisitKey,
+  context: surveyResponse.respondentContext,
+  suggestions: sql<number>`(SELECT count(*)::int FROM shop_suggestion s WHERE s.response_id = ${surveyResponse.id})`,
+};
+
 export async function listResponses(tx: Tx, filters: ResponseFilters, offset: number, size: number) {
   return tx
-    .select({
-      id: surveyResponse.id,
-      source: surveyResponse.source,
-      submittedAt: surveyResponse.submittedAt,
-      receivedOn: surveyResponse.receivedOn,
-      isTest: surveyResponse.isTest,
-      matchStatus: surveyResponse.matchStatus,
-      canonical: surveyResponse.canonical,
-      duplicateDisposition: surveyResponse.duplicateDisposition,
-      shopName: shop.name,
-      sourceVisitKey: repairVisit.sourceVisitKey,
-      context: surveyResponse.respondentContext,
-      suggestions: sql<number>`(SELECT count(*)::int FROM shop_suggestion s WHERE s.response_id = ${surveyResponse.id})`,
-    })
+    .select(listColumns)
     .from(surveyResponse)
     .leftJoin(shop, eq(shop.id, surveyResponse.shopId))
     .leftJoin(repairVisit, eq(repairVisit.id, surveyResponse.visitId))
@@ -540,6 +576,39 @@ export async function listResponses(tx: Tx, filters: ResponseFilters, offset: nu
     .orderBy(desc(surveyResponse.submittedAt), desc(surveyResponse.id))
     .limit(size)
     .offset(offset);
+}
+
+/** Rows for a CSV export: the list columns plus the latest answers and the survey versions they used. */
+export async function exportResponses(tx: Tx, filters: ResponseFilters, limit: number) {
+  return tx
+    .select({
+      ...listColumns,
+      versionId: surveyResponse.instrumentVersionId,
+      additionVersionId: surveyResponse.additionVersionId,
+      repairOrder: repairVisit.repairOrder,
+      deliveredOn: repairVisit.deliveredOn,
+      answers: sql<Record<string, unknown> | null>`(SELECT rr.answers FROM response_revision rr WHERE rr.response_id = ${surveyResponse.id} ORDER BY rr.revision DESC LIMIT 1)`,
+      revision: sql<number>`(SELECT max(rr.revision)::int FROM response_revision rr WHERE rr.response_id = ${surveyResponse.id})`,
+    })
+    .from(surveyResponse)
+    .leftJoin(shop, eq(shop.id, surveyResponse.shopId))
+    .leftJoin(repairVisit, eq(repairVisit.id, surveyResponse.visitId))
+    .where(responsesWhere(filters))
+    .orderBy(desc(surveyResponse.submittedAt), desc(surveyResponse.id))
+    .limit(limit);
+}
+
+/** Submitted responses per month for the last six months: all, and each review queue by where it stands now. */
+export async function monthlyQueueCounts(tx: Tx) {
+  const result = await tx.execute<{ total: number; visit_unmatched: number; shop_unconfirmed: number; duplicate_review: number }>(sql`
+    SELECT count(r.id)::int AS total,
+      count(r.id) FILTER (WHERE r.match_status = 'visit_unmatched')::int AS visit_unmatched,
+      count(r.id) FILTER (WHERE r.match_status = 'shop_unconfirmed')::int AS shop_unconfirmed,
+      count(r.id) FILTER (WHERE r.match_status = 'duplicate_review')::int AS duplicate_review
+    FROM generate_series(date_trunc('month', now() AT TIME ZONE 'America/New_York') - interval '5 months', date_trunc('month', now() AT TIME ZONE 'America/New_York'), interval '1 month') m
+    LEFT JOIN survey_response r ON r.status = 'submitted' AND date_trunc('month', r.submitted_at AT TIME ZONE 'America/New_York') = m
+    GROUP BY m ORDER BY m`);
+  return result.rows;
 }
 
 export async function countByMatchStatus(tx: Tx) {

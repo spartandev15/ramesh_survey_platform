@@ -32,6 +32,7 @@ export function InstrumentForm({ fromVersionId, submitLabel, defaultName = "" }:
         id={fromVersionId ? "dup-name" : "new-name"}
         name="name"
         label="Survey name"
+        placeholder="e.g. Service Experience Survey"
         value={name}
         error={state.fieldErrors?.name}
         onChange={(e) => {
@@ -43,6 +44,7 @@ export function InstrumentForm({ fromVersionId, submitLabel, defaultName = "" }:
         id={fromVersionId ? "dup-key" : "new-key"}
         name="key"
         label="Survey key"
+        placeholder="e.g. service_experience"
         value={key}
         error={state.fieldErrors?.key}
         onChange={(e) => {
@@ -51,7 +53,7 @@ export function InstrumentForm({ fromVersionId, submitLabel, defaultName = "" }:
         }}
       />
       <p className="-mt-2 text-xs text-gray-500">Permanent ID used in exports and reports. Lowercase letters, numbers and underscores.</p>
-      <TextField id={fromVersionId ? "dup-desc" : "new-desc"} name="description" label="Description (optional)" defaultValue={state.values?.description} error={state.fieldErrors?.description} />
+      <TextField id={fromVersionId ? "dup-desc" : "new-desc"} name="description" label="Description (optional)" placeholder="A short note for PSG staff" defaultValue={state.values?.description} error={state.fieldErrors?.description} />
       <SubmitButton pending={pending} pendingLabel="Creating…">
         {submitLabel}
       </SubmitButton>

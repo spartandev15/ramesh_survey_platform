@@ -32,6 +32,26 @@ export async function listVisibleShops(): Promise<ShopRow[]> {
     .orderBy(asc(shop.name));
 }
 
+/**
+ * Submitted responses per shop (real ones; an internal test shop shows its own test responses), and
+ * the production total per month for the last 12 months (oldest first), for
+ * the shop list. Test data never adds to the totals (SR-03). PSG staff only.
+ */
+export async function shopResponseStats(): Promise<{ byShop: Map<string, number>; production: number; monthly: number[] }> {
+  await requireCapability("psg.workspace");
+  return getDb().transaction(async (tx) => {
+    // A production shop counts only real responses; an internal test shop counts its own test responses.
+    const byShop = await tx.execute<{ shop_id: string; n: number }>(sql`SELECT r.shop_id, count(*) AS n FROM survey_response r JOIN shop s ON s.id = r.shop_id WHERE r.status = 'submitted' AND (NOT r.is_test OR s.is_test_shop) GROUP BY r.shop_id`);
+    const [total] = (await tx.execute<{ n: number }>(sql`SELECT count(*) AS n FROM survey_response WHERE status = 'submitted' AND NOT is_test`)).rows;
+    const monthly = await tx.execute<{ n: number }>(sql`
+      SELECT count(r.id) AS n
+      FROM generate_series(date_trunc('month', now() AT TIME ZONE 'America/New_York') - interval '11 months', date_trunc('month', now() AT TIME ZONE 'America/New_York'), interval '1 month') m
+      LEFT JOIN survey_response r ON r.status = 'submitted' AND NOT r.is_test AND date_trunc('month', r.submitted_at AT TIME ZONE 'America/New_York') = m
+      GROUP BY m ORDER BY m`);
+    return { byShop: new Map(byShop.rows.map((r) => [r.shop_id, Number(r.n)])), production: Number(total?.n ?? 0), monthly: monthly.rows.map((r) => Number(r.n)) };
+  });
+}
+
 export async function getShop(shopId: string): Promise<ShopRow | null> {
   await requireShopRead(shopId);
   const [row] = await getDb().select().from(shop).where(eq(shop.id, shopId));

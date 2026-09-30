@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import {
   accessToken,
@@ -120,10 +120,11 @@ export async function prepareNext(tx: Tx, owner: string, links: LinkConfig, now:
   if (ctx.shop.archivedAt) return stop("cancelled", "SHOP_ARCHIVED");
 
   const recipient = normalizeEmail(intent.recipient);
+  // Answered through this link, or on paper or the public form and matched to this visit (SR-24, AT-24).
   const [submitted] = await tx
     .select({ id: surveyResponse.id })
     .from(surveyResponse)
-    .where(and(eq(surveyResponse.invitationId, invitationId), eq(surveyResponse.status, "submitted")))
+    .where(and(or(eq(surveyResponse.invitationId, invitationId), eq(surveyResponse.visitId, ctx.visit.id)), eq(surveyResponse.status, "submitted")))
     .limit(1);
   const [optedOut] = recipient
     ? await tx.select({ id: shopOptOut.id }).from(shopOptOut).where(and(eq(shopOptOut.shopId, ctx.shop.id), eq(shopOptOut.emailNormalized, recipient)))
@@ -317,7 +318,8 @@ export async function scheduleReminders(tx: Tx, now: Date, limit = 500): Promise
         // Live shops, plus test records in Test mode so the flow can be tested end to end.
         sql`(${shopSurveySettings.mode} = 'live' OR (${shopSurveySettings.mode} = 'test' AND ${invitation.isTest}))`,
         sql`NOT EXISTS (SELECT 1 FROM email_intent r WHERE r.invitation_id = ${invitation.id} AND r.kind = 'reminder')`,
-        sql`NOT EXISTS (SELECT 1 FROM survey_response s WHERE s.invitation_id = ${invitation.id} AND s.status = 'submitted')`,
+        // Answered by link, or on paper or the public form and matched to the visit (SR-24).
+        sql`NOT EXISTS (SELECT 1 FROM survey_response s WHERE (s.invitation_id = ${invitation.id} OR s.visit_id = ${invitation.visitId}) AND s.status = 'submitted')`,
       ),
     )
     .limit(limit);
@@ -413,7 +415,7 @@ export async function recordOptOut(tx: Tx, actor: Actor | { type: "respondent" }
  */
 export async function requestRenewal(tx: Tx, token: string, now: Date): Promise<void> {
   const [row] = await tx
-    .select({ invitationId: invitation.id, isTest: invitation.isTest, shopId: invitation.shopId, expiresAt: accessToken.expiresAt, revokedAt: accessToken.revokedAt, email: customer.emailNormalized })
+    .select({ invitationId: invitation.id, visitId: invitation.visitId, isTest: invitation.isTest, shopId: invitation.shopId, expiresAt: accessToken.expiresAt, revokedAt: accessToken.revokedAt, email: customer.emailNormalized })
     .from(accessToken)
     .innerJoin(invitation, eq(invitation.id, accessToken.invitationId))
     .leftJoin(repairVisit, eq(repairVisit.id, invitation.visitId))
@@ -422,7 +424,8 @@ export async function requestRenewal(tx: Tx, token: string, now: Date): Promise<
     .for("update", { of: invitation });
   if (!row || row.revokedAt || row.expiresAt.getTime() > now.getTime() || !row.email) return;
 
-  const [submitted] = await tx.select({ id: surveyResponse.id }).from(surveyResponse).where(and(eq(surveyResponse.invitationId, row.invitationId), eq(surveyResponse.status, "submitted")));
+  const answered = row.visitId ? or(eq(surveyResponse.invitationId, row.invitationId), eq(surveyResponse.visitId, row.visitId)) : eq(surveyResponse.invitationId, row.invitationId);
+  const [submitted] = await tx.select({ id: surveyResponse.id }).from(surveyResponse).where(and(answered, eq(surveyResponse.status, "submitted")));
   if (submitted) return;
   const [opted] = await tx.select({ id: shopOptOut.id }).from(shopOptOut).where(and(eq(shopOptOut.shopId, row.shopId), eq(shopOptOut.emailNormalized, row.email)));
   if (opted) return;
@@ -508,7 +511,41 @@ export interface ProblemRow {
 const PROBLEM_STATES = ["held", "acceptance_unknown", "failed", "bounced"] as const;
 
 /** Emails that need a person, with the shop they belong to (survey emails via the invitation, alert emails via their case). */
-export async function countProblems(tx: Tx) {
+export type ProblemState = (typeof PROBLEM_STATES)[number];
+
+/** Email review filters: one state, attempted within N days, and words in the shop name or visit ID. */
+export interface ProblemFilter {
+  state?: ProblemState;
+  sinceDays?: number;
+  q?: string;
+}
+
+const problemWhere = (f: ProblemFilter) =>
+  and(
+    f.state ? eq(emailIntent.state, f.state) : inArray(emailIntent.state, [...PROBLEM_STATES]),
+    f.sinceDays ? sql`coalesce(${emailIntent.lastAttemptAt}, ${emailIntent.updatedAt}) >= now() - make_interval(days => ${f.sinceDays})` : undefined,
+    ...(f.q ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((word) => {
+        const like = "%" + word.replaceAll("%", "").replaceAll("_", "") + "%";
+        return sql`concat_ws(' ', ${shop.name}, ${repairVisit.sourceVisitKey}) ILIKE ${like}`;
+      }),
+  );
+
+/** How many emails wait in each review state. */
+export async function problemStateCounts(tx: Tx): Promise<Record<ProblemState, number>> {
+  const rows = await tx
+    .select({ state: emailIntent.state, n: count() })
+    .from(emailIntent)
+    .where(inArray(emailIntent.state, [...PROBLEM_STATES]))
+    .groupBy(emailIntent.state);
+  const out = Object.fromEntries(PROBLEM_STATES.map((st) => [st, 0])) as Record<ProblemState, number>;
+  for (const r of rows) out[r.state as ProblemState] = r.n;
+  return out;
+}
+
+export async function countProblems(tx: Tx, f: ProblemFilter = {}) {
   const [row] = await tx
     .select({ n: count() })
     .from(emailIntent)
@@ -516,11 +553,12 @@ export async function countProblems(tx: Tx) {
     .leftJoin(alertApproval, eq(alertApproval.id, emailIntent.alertApprovalId))
     .leftJoin(alertCase, eq(alertCase.id, alertApproval.caseId))
     .innerJoin(shop, sql`${shop.id} = COALESCE(${invitation.shopId}, ${alertCase.shopId})`)
-    .where(inArray(emailIntent.state, [...PROBLEM_STATES]));
+    .leftJoin(repairVisit, eq(repairVisit.id, invitation.visitId))
+    .where(problemWhere(f));
   return row.n;
 }
 
-export async function listProblems(tx: Tx, offset: number, size: number): Promise<ProblemRow[]> {
+export async function listProblems(tx: Tx, offset: number, size: number, f: ProblemFilter = {}): Promise<ProblemRow[]> {
   return tx
     .select({
       id: emailIntent.id,
@@ -545,7 +583,7 @@ export async function listProblems(tx: Tx, offset: number, size: number): Promis
     .leftJoin(alertCase, eq(alertCase.id, alertApproval.caseId))
     .innerJoin(shop, sql`${shop.id} = COALESCE(${invitation.shopId}, ${alertCase.shopId})`)
     .leftJoin(repairVisit, eq(repairVisit.id, invitation.visitId))
-    .where(inArray(emailIntent.state, [...PROBLEM_STATES]))
+    .where(problemWhere(f))
     .orderBy(desc(emailIntent.updatedAt), desc(emailIntent.id))
     .limit(size)
     .offset(offset);

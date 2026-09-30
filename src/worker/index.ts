@@ -14,6 +14,7 @@ import { emailTransport } from "@/modules/email";
 import { configuredAdapter } from "@/modules/bridge/adapter";
 import { runBridgeCycle } from "@/modules/bridge/sync";
 import { runDispatchCycle, runReminderScheduler } from "@/modules/email-ledger/dispatcher";
+import { pruneDevData, pruneKeep } from "@/modules/devtools/prune";
 import { opsRecipients, runDailyReport, runHealthCheck, type Notify } from "@/modules/monitoring/monitoring";
 
 const QUEUES = {
@@ -28,6 +29,8 @@ const QUEUES = {
   opsHealth: "ops.health",
   // Daily reconciliation counts for PSG operations (PDF 09); sends once a day.
   opsDaily: "ops.daily",
+  // Development only (DEV_PRUNE_KEEP): holds the local database to its newest rows.
+  devPrune: "dev.prune",
 } as const;
 
 // Identifies this process on claimed intents, so a lease can only be settled by its owner.
@@ -50,6 +53,9 @@ async function main() {
   // No FileMaker connection yet (G-09): no bridge job at all, rather than an empty one every minute.
   if (configuredAdapter()) await boss.schedule(QUEUES.bridgeSync, "* * * * *");
   else await boss.unschedule(QUEUES.bridgeSync);
+  const pruneTo = process.env.NODE_ENV === "production" ? null : pruneKeep(process.env.DEV_PRUNE_KEEP);
+  if (pruneTo) await boss.schedule(QUEUES.devPrune, "*/15 * * * *");
+  else await boss.unschedule(QUEUES.devPrune);
 
   await boss.work(QUEUES.heartbeat, async () => {
     logger.debug("worker heartbeat");
@@ -75,6 +81,12 @@ async function main() {
   });
   await boss.work(QUEUES.opsDaily, async () => {
     if (await runDailyReport(notify)) logger.info("daily counts report sent");
+  });
+
+  await boss.work(QUEUES.devPrune, async () => {
+    if (!pruneTo) return;
+    const removed = await pruneDevData(pruneTo);
+    if (Object.keys(removed).length > 0) logger.info({ removed, keep: pruneTo }, "development data pruned");
   });
 
   logger.info({ queues: Object.values(QUEUES), workerId: WORKER_ID }, "worker started");

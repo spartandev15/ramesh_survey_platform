@@ -16,11 +16,12 @@ const requireId = (id: string) => {
 };
 const as = (userId: string) => ({ type: "user" as const, userId });
 
-export async function listLegacyCases(view: store.LegacyView, page: number) {
+export async function listLegacyCases(view: store.LegacyView, page: number, q?: string) {
   await requireCapability("psg.workspace");
+  const search = q?.trim().slice(0, 100) || undefined;
   return getDb().transaction(async (tx) => {
     const counts = await store.legacyCaseCounts(tx);
-    const list = await loadPage(page, async () => counts[view], (offset, size) => store.listLegacyCases(tx, view, offset, size));
+    const list = await loadPage(page, async () => (search ? store.countLegacyCases(tx, view, search) : counts[view]), (offset, size) => store.listLegacyCases(tx, view, offset, size, search), 10);
     return { list, counts };
   });
 }

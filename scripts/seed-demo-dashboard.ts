@@ -11,6 +11,7 @@
  *
  *   npm run seed:demo            (once: the demo survey)
  *   npm run seed:dashboard       (then this; it does nothing when the shop already has responses)
+ *   npm run seed:dashboard -- --responses 180   (a smaller set, about that many responses)
  */
 import { readFileSync } from "node:fs";
 import { and, count, eq, sql } from "drizzle-orm";
@@ -25,6 +26,11 @@ const SLUG = "demo-collision";
 const DAYS = 182;
 const DAY = 86_400_000;
 const system = { type: "system" } as const;
+// The full set is about 600 responses; --responses N scales responses and history down to about N.
+const flag = process.argv.indexOf("--responses");
+const wanted = flag > 0 ? Number(process.argv[flag + 1]) : NaN;
+if (flag > 0 && !(Number.isInteger(wanted) && wanted > 0)) throw new Error("--responses needs a positive whole number, e.g. --responses 180");
+const SCALE = flag > 0 ? Math.min(1, wanted / 600) : 1;
 
 /** Repeatable pseudo-random numbers, so every seeded database looks the same. */
 function random(seed: number) {
@@ -60,7 +66,7 @@ async function seedHistory(shopId: string, before: number) {
   if (n > 0) return 0;
   const rows = [];
   for (let day = 1; day <= 365; day++) {
-    if (rand() < 0.45) continue;
+    if (rand() >= 0.55 * SCALE) continue;
     const happy = rand() < 0.7;
     rows.push({
       shopId,
@@ -125,7 +131,8 @@ async function main() {
     const progress = day / DAYS;
     const weekday = new Date(start + day * DAY).getUTCDay();
     // Busier on weekdays, and a little busier as the shop grows.
-    const perDay = weekday === 0 ? 0 : weekday === 6 ? 1 : 2 + Math.round(rand() * 3 + progress * 2);
+    const full = weekday === 0 ? 0 : weekday === 6 ? 1 : 2 + Math.round(rand() * 3 + progress * 2);
+    const perDay = SCALE === 1 ? full : Math.floor(full * SCALE + rand());
     for (let i = 0; i < perDay; i++) {
       const at = new Date(Math.min(start + day * DAY + (9 + rand() * 8) * 3_600_000, Date.now() - 60_000));
       const roll = rand();

@@ -63,7 +63,7 @@ export function decideDispatch(f: DispatchFacts): DispatchDecision {
   if (block === "SHOP_PAUSED") return { action: "hold", reason: block };
 
   if (f.kind === "initial") {
-    if (isExcluded(f.blockers)) return { action: "cancel", reason: f.blockers.find((b) => b.startsWith("LEGACY_"))! };
+    if (isExcluded(f.blockers)) return { action: "cancel", reason: f.blockers.find((b) => b.startsWith("LEGACY_")) ?? "SUBMITTED" };
     const other = f.blockers.find((b) => b !== "SHOP_PAUSED" && b !== "PREACTIVATION_IMPORT" && b !== "SHOP_OPT_OUT" && b !== "TEST_RECIPIENT_NOT_ALLOWED");
     if (other) return { action: "hold", reason: other };
   }

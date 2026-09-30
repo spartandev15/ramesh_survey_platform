@@ -1,11 +1,11 @@
-import { Activity, Archive, ArrowRightLeft, BarChart3, BellRing, ClipboardCheck, ClipboardList, FileUp, Inbox, LayoutDashboard, ListChecks, MailCheck, MailWarning, MessageSquareWarning, Send, Store, type LucideIcon } from "lucide-react";
+import { Activity, Archive, ArrowRightLeft, BarChart3, BellRing, ClipboardCheck, ClipboardList, FileUp, House, Inbox, ListChecks, MailCheck, MailWarning, MessageSquareWarning, Send, Store, type LucideIcon } from "lucide-react";
 
 /**
  * Icons are referenced by name so server layouts can pass nav items to the
  * client shell (components cannot cross the server/client boundary).
  */
 export const NAV_ICONS = {
-  overview: LayoutDashboard,
+  overview: House,
   operations: Activity,
   shops: Store,
   readiness: ClipboardCheck,
@@ -29,6 +29,8 @@ export interface NavItem {
   href: string;
   label: string;
   icon: NavIcon;
+  /** Sidebar section heading; consecutive items with the same group sit under one heading. */
+  group?: string;
 }
 
 /** Remembers the desktop sidebar state so the server renders it without a flash. */

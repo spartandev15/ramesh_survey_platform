@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { inOrder, type Tx } from "@/db/client";
 import {
   accessToken,
@@ -11,6 +11,7 @@ import {
   shop,
   shopOptOut,
   shopSurveySettings,
+  surveyResponse,
   testRecipientAllowlist,
 } from "@/db/schema";
 import { recordAudit } from "@/modules/audit/audit";
@@ -111,7 +112,8 @@ async function evaluate(tx: Tx, shopId: string, rows: SelectedRow[], facts: Shop
   const keys = [...new Set(rows.map((r) => r.sourceVisitKey))];
   const emails = [...new Set(rows.map((r) => r.emailNormalized).filter((e): e is string => Boolean(e)))];
   const ids = rows.map((r) => r.id);
-  const [ledger, optOuts, allowlist, intents] = await inOrder([
+  const visitIds = [...new Set(rows.map((r) => r.visitId).filter((v): v is string => Boolean(v)))];
+  const [ledger, optOuts, allowlist, intents, answers] = await inOrder([
     keys.length
       ? tx
           .select({ system: legacySurveyLedger.sourceSystem, key: legacySurveyLedger.sourceVisitKey, completedOn: legacySurveyLedger.completedOn })
@@ -121,13 +123,22 @@ async function evaluate(tx: Tx, shopId: string, rows: SelectedRow[], facts: Shop
     emails.length ? tx.select({ email: shopOptOut.emailNormalized }).from(shopOptOut).where(and(eq(shopOptOut.shopId, shopId), inArray(shopOptOut.emailNormalized, emails))) : Promise.resolve([]),
     tx.select({ entry: testRecipientAllowlist.entry }).from(testRecipientAllowlist),
     ids.length ? tx.select({ invitationId: emailIntent.invitationId, state: emailIntent.state, reason: emailIntent.stateReason }).from(emailIntent).where(and(inArray(emailIntent.invitationId, ids), eq(emailIntent.kind, "initial"))) : Promise.resolve([]),
+    // Answered by link, on paper or the public form: nothing more is sent for that visit (SR-24).
+    ids.length
+      ? tx
+          .selectDistinct({ visitId: surveyResponse.visitId, invitationId: surveyResponse.invitationId })
+          .from(surveyResponse)
+          .where(and(eq(surveyResponse.status, "submitted"), or(inArray(surveyResponse.invitationId, ids), visitIds.length ? inArray(surveyResponse.visitId, visitIds) : sql`false`)))
+      : Promise.resolve([]),
   ]);
+  const answered = new Set(answers.flatMap((a) => [a.visitId, a.invitationId].filter((v): v is string => Boolean(v))));
   const legacy = new Map(ledger.map((l) => [`${l.system}\u0000${l.key}`, { invited: true, completed: l.completedOn !== null }]));
   const opted = new Set(optOuts.map((o) => o.email));
   const entries = allowlist.map((a) => a.entry);
   const intentByInvitation = new Map(intents.map((i) => [i.invitationId, i]));
 
   return rows.map((r) => {
+    const isAnswered = answered.has(r.id) || (r.visitId !== null && answered.has(r.visitId));
     const blockers = sendBlockers(
       {
         isTest: r.isTest,
@@ -136,6 +147,7 @@ async function evaluate(tx: Tx, shopId: string, rows: SelectedRow[], facts: Shop
         legacy: legacy.get(`${r.sourceSystem}\u0000${r.sourceVisitKey}`) ?? null,
         optedOut: r.emailNormalized ? opted.has(r.emailNormalized) : false,
         recipientAllowlisted: r.emailNormalized ? matchesTestAllowlist(r.emailNormalized, entries) : false,
+        answered: isAnswered,
       },
       facts,
     );
@@ -155,7 +167,7 @@ async function evaluate(tx: Tx, shopId: string, rows: SelectedRow[], facts: Shop
           : blockers.every((b) => WAITING_REASONS.includes(b))
             ? "waiting"
             : "held";
-    return { row: r, blockers: intentState ? (["ALREADY_SENT"] as ReasonCode[]) : blockers, view, intentState, intentReason: intent?.reason ?? null };
+    return { row: r, blockers: intentState ? (["ALREADY_SENT"] as ReasonCode[]) : blockers, view, intentState, intentReason: intent?.reason ?? null, answered: isAnswered };
   });
 }
 
@@ -323,6 +335,9 @@ export async function issuePrintableLink(tx: Tx, actor: Actor, shopId: string, i
   const rows = await selectRows(tx, and(eq(invitation.shopId, shopId), eq(invitation.id, id)), true);
   if (rows.length === 0) throw new InvitationError("not_found", "This invitation no longer exists.");
   const [e] = await evaluate(tx, shopId, rows, facts);
+  // Checked here, not only by hiding the button (SR-40): an answered visit or a cancelled email never gets a new link (SR-08, SR-24).
+  if (e.answered) throw new InvitationError("invalid", "A printable link cannot be issued: the survey was already answered for this visit.", ["SURVEY_ANSWERED"]);
+  if (e.intentState === "cancelled") throw new InvitationError("invalid", "A printable link cannot be issued: this invitation was cancelled.");
   const blocking = e.intentState ? [] : e.blockers.filter((b) => !PRINTABLE_DESPITE.includes(b));
   if (blocking.length > 0) throw new InvitationError("invalid", "A printable link cannot be issued yet.", blocking);
 

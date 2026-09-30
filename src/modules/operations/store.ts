@@ -18,6 +18,9 @@ import {
   user,
 } from "@/db/schema";
 import { hasCapability, type PsgRole } from "@/modules/access/capabilities";
+import { configuredAdapter } from "@/modules/bridge/adapter";
+import { readiness } from "@/modules/bridge/policy";
+import { confirmedGates } from "@/modules/bridge/store";
 import { recordAudit } from "@/modules/audit/audit";
 import { listSuppressions } from "@/modules/cases/store";
 import { listProblems } from "@/modules/email-ledger/store";
@@ -399,9 +402,11 @@ export async function healthSnapshot(tx: Tx, now = new Date()) {
     })
     .from(bridgeEvent);
   const beat = await lastHeartbeat(tx);
+  // Writes are on only with a configured connection and every check recorded (SR-42); never imply otherwise (AT-35).
+  const writesOn = readiness(configuredAdapter() !== null, await confirmedGates(tx)).enabled;
   return {
     email: { ...email, oldestDue: email.oldestDue ? new Date(email.oldestDue) : null },
-    bridge: { ...bridge, lastConfirmed: bridge.lastConfirmed ? new Date(bridge.lastConfirmed) : null },
+    bridge: { ...bridge, writesOn, lastConfirmed: bridge.lastConfirmed ? new Date(bridge.lastConfirmed) : null },
     worker: { lastHeartbeat: beat, healthy: workerHealth(beat, now).ok },
   };
 }

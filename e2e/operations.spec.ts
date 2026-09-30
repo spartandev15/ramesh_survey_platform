@@ -31,7 +31,7 @@ test("operators see held work with a reason and can take ownership", async ({ pa
   await expect(page.getByRole("heading", { name: "Operator queues" })).toBeVisible();
   const item = page.getByRole("listitem").filter({ hasText: `Visit ${id}-H` });
   await expect(item).toHaveCount(0);
-  await page.getByRole("link", { name: "Include test data" }).click();
+  await page.getByRole("switch", { name: "Hide test data" }).click();
   await page.waitForURL(/test=1/);
   // Oldest items come first, so a new one is on the last page.
   expect(await findOnPages(page, item)).toBe(true);

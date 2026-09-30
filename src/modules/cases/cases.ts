@@ -16,13 +16,21 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const requireId = (...ids: string[]) => {
   if (!ids.every((id) => UUID_RE.test(id))) throw new store.CaseError("not_found", "This case no longer exists.");
 };
+/** PSG lists show ten rows a page, so a page needs little scrolling. */
+const LIST_SIZE = 10;
 const as = (userId: string) => ({ type: "user" as const, userId });
 
 // PSG ---------------------------------------------------------------------
 
-export async function listCases(view: store.CaseView, page: number) {
+export async function listCases(view: store.CaseView, page: number, search: store.CaseSearch = {}) {
   await requireCapability("psg.workspace");
-  return getDb().transaction((tx) => loadPage(page, () => store.countCases(tx, view), (offset, size) => store.listCases(tx, view, offset, size)));
+  if (search.shopId && !UUID_RE.test(search.shopId)) search = { ...search, shopId: undefined };
+  return getDb().transaction((tx) => loadPage(page, () => store.countCases(tx, view, search), (offset, size) => store.listCases(tx, view, offset, size, search), LIST_SIZE));
+}
+
+export async function alertReasonCounts(view: store.CaseView) {
+  await requireCapability("psg.workspace");
+  return getDb().transaction((tx) => store.alertReasonCounts(tx, view));
 }
 
 export async function caseCounts() {
@@ -60,9 +68,15 @@ export async function resolveCase(caseId: string, revision: number, outcome: sto
   return getDb().transaction((tx) => store.resolveCase(tx, as(principal.userId), caseId, revision, outcome, note.slice(0, 2000)));
 }
 
-export async function listSuppressions(status: "outstanding" | "acknowledged", page: number) {
+export async function listSuppressions(status: "outstanding" | "acknowledged", page: number, search: store.SuppressionSearch = {}) {
   await requireCapability("psg.workspace");
-  return getDb().transaction((tx) => loadPage(page, () => store.countSuppressions(tx, status), (offset, size) => store.listSuppressions(tx, status, { offset, size })));
+  if (search.shopId && !UUID_RE.test(search.shopId)) search = { ...search, shopId: undefined };
+  return getDb().transaction((tx) => loadPage(page, () => store.countSuppressions(tx, status, search), (offset, size) => store.listSuppressions(tx, status, { offset, size }, search), LIST_SIZE));
+}
+
+export async function suppressionStats() {
+  await requireCapability("psg.workspace");
+  return getDb().transaction((tx) => store.suppressionStats(tx));
 }
 
 export async function acknowledgeSuppression(actionId: string, revision: number, result: store.SuppressionResult, evidence: string) {

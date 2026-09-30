@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Download } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hasCapability } from "@/modules/access/capabilities";
@@ -11,7 +12,7 @@ import { caseForResponse } from "@/modules/cases/cases";
 import { findCandidateVisits, getResponse } from "@/modules/responses/staff";
 import type { RespondentContext } from "@/modules/responses/staff-store";
 import { listVisibleShops } from "@/modules/shops/shops";
-import { responseStatus, SOURCE_LABELS } from "../labels";
+import { responseStatus, SOURCE_LABELS } from "@/modules/responses/labels";
 import { CorrectionPanel, DuplicatePanel, MatchPanel, ShopPanel } from "./panels";
 
 export const metadata: Metadata = { title: "Response" };
@@ -62,6 +63,15 @@ export default async function ResponseDetailPage({ params }: PageProps<"/psg/res
         <h1 className="text-2xl font-semibold text-brand-navy-900">Response</h1>
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.style}`}>{status.label}</span>
         {response.isTest && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Test data</span>}
+        {/* A plain link: client-side navigation would try to render the CSV as a page. */}
+        <a
+          href={`/psg/responses/export?id=${response.id}`}
+          download
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+        >
+          <Download aria-hidden="true" className="size-4" />
+          Export CSV
+        </a>
       </div>
 
       <dl className="mt-4 grid gap-x-6 gap-y-3 rounded-xl border border-gray-200 bg-white p-5 text-sm sm:grid-cols-3">

@@ -28,6 +28,7 @@ All settings are environment variables; `.env.example` lists them.
 | `TRUSTED_PROXY_HOPS` | Proxies in front of the app that add to `X-Forwarded-For` (default 1). Wrong values let one address share or dodge rate limits |
 | `OPT_OUT_SECRET` | Optional signing key for opt-out links. Set it before ever rotating `BETTER_AUTH_SECRET`; links signed with the older key keep working |
 | `LOG_LEVEL` | `info` in production |
+| `DEV_PRUNE_KEEP` | Development only: the worker keeps the newest N rows per growing table (every 15 minutes). **Never set it in production.** The prune also refuses any database with a Live or Paused shop or a real (non-test) response, and never runs with `NODE_ENV=production` or `EMAIL_PROVIDER=sendgrid` |
 
 In production, survey links are removed from logs automatically.
 

@@ -1,6 +1,9 @@
 import "server-only";
 import { getDb } from "@/db/client";
+import { toCsv } from "@/lib/csv";
 import { requireCapability } from "@/modules/access/principal";
+import { recordAudit } from "@/modules/audit/audit";
+import { filterItems, QUEUE_LABELS, searchItems, sortItemsBy, type OwnerFilter, type QueueKind, type QueueSearch } from "./policy";
 import * as store from "./store";
 
 /**
@@ -12,6 +15,24 @@ import * as store from "./store";
 export async function listOperatorQueues(includeTest: boolean) {
   await requireCapability("operations.view");
   return getDb().transaction(async (tx) => ({ items: await store.listOperatorItems(tx, new Date(), { includeTest }), operators: await store.listOperators(tx) }));
+}
+
+/**
+ * The queue as CSV with the page's filters, every page not just one. Titles
+ * can name customers, so each export is audited like the results export (SR-40).
+ */
+export async function exportOperatorQueue(filters: { kind: QueueKind | null; owner: OwnerFilter; includeTest: boolean; search: QueueSearch }) {
+  const { principal } = await requireCapability("operations.view");
+  return getDb().transaction(async (tx) => {
+    const all = await store.listOperatorItems(tx, new Date(), { history: false, includeTest: filters.includeTest });
+    const items = sortItemsBy(searchItems(filterItems(all, { owner: filters.owner, userId: principal.userId, includeTest: filters.includeTest }), filters.search), filters.search.sort).filter((i) => !filters.kind || i.kind === filters.kind);
+    await recordAudit(
+      { actorType: "user", actorUserId: principal.userId, action: "operator_queue.exported", subjectType: "operator_queue", subjectId: filters.kind ?? "all", after: { ...filters, rows: items.length } },
+      tx,
+    );
+    const rows = items.map((i) => [QUEUE_LABELS[i.kind], i.title, i.shopName ?? "", i.reason, i.provenance ?? "", i.since.toISOString(), i.overdue ? "yes" : "no", i.owner?.name ?? "", i.isTest ? "yes" : "no"]);
+    return toCsv(["Queue", "Item", "Shop", "Why", "Origin", "Waiting since", "Overdue", "Owner", "Test data"], rows);
+  });
 }
 
 /** Counts for the Overview: open operator items (SR-38) and system health (SR-48). Production data only. */

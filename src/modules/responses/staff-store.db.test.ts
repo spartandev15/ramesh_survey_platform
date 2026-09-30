@@ -198,6 +198,19 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
       expect(intents.every((i) => i.email_intent.kind === "initial")).toBe(true);
     }));
 
+  it("a visit answered on paper leaves the invitation queue and gets no printable link (SR-24)", () =>
+    inRollback(async (tx) => {
+      // No email, so the visit is held with no invitation email yet.
+      const { shop: s, visit } = await shopWithVisits(tx, ["P1,Pat,Doe,"]);
+      const before = (await invitations.listQueue(tx, s.id)).find((r) => r.visitId === visit("P1").id)!;
+      expect(before.view).toBe("held");
+      await staff.submitPaper(tx, actor, { shopId: s.id, visitId: visit("P1").id, receivedOn: "2026-09-20", answers: complete, requestKey: `k-${unique()}` });
+      const after = (await invitations.listQueue(tx, s.id)).find((r) => r.visitId === visit("P1").id)!;
+      expect(after.view).toBe("excluded");
+      expect(after.blockers).toContain("SURVEY_ANSWERED");
+      await expect(invitations.issuePrintableLink(tx, actor, s.id, after.id)).rejects.toMatchObject({ kind: "invalid" });
+    }));
+
   it("public lookups never reach another shop's visits (AT-01, AT-13)", () =>
     inRollback(async (tx) => {
       const a = await shopWithVisits(tx, ["X1,Jo,Smith,jo@example.com"]);

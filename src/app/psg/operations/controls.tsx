@@ -14,6 +14,7 @@ export function OwnerControl({
   operators,
   currentUserId,
   itemTitle,
+  stacked = false,
 }: {
   subjectType: string;
   subjectId: string;
@@ -22,6 +23,8 @@ export function OwnerControl({
   operators: { userId: string; name: string }[];
   currentUserId: string;
   itemTitle: string;
+  /** Label above, "Take it" below: for the narrow owner column of the queue list. */
+  stacked?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -37,8 +40,8 @@ export function OwnerControl({
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor={id} className="text-xs font-medium text-gray-700">
+      <div className={stacked ? "flex flex-col items-start gap-1.5" : "flex flex-wrap items-center gap-3"}>
+        <label htmlFor={id} className={stacked ? "text-xs text-gray-500" : "text-sm font-medium text-gray-700"}>
           Owner<span className="sr-only"> of {itemTitle}</span>
         </label>
         <select
@@ -46,7 +49,7 @@ export function OwnerControl({
           value={ownerUserId ?? ""}
           disabled={pending}
           onChange={(e) => save(e.target.value || null)}
-          className="max-w-56 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs disabled:opacity-50"
+          className={`max-w-56 rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm disabled:opacity-50 ${stacked ? "w-36 px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"}`}
         >
           <option value="">Nobody yet</option>
           {operators.map((o) => (
@@ -61,7 +64,7 @@ export function OwnerControl({
             disabled={pending}
             onClick={() => save(currentUserId)}
             aria-label={`Take ownership of ${itemTitle}`}
-            className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:border-brand-navy-700 disabled:opacity-50"
+            className={`rounded-lg border border-gray-200 bg-white font-medium text-gray-700 shadow-sm transition hover:border-gray-400 disabled:opacity-50 ${stacked ? "px-2.5 py-1 text-xs" : "px-4 py-2 text-sm"}`}
           >
             Take it
           </button>

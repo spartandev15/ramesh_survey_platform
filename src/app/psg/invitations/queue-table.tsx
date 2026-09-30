@@ -79,7 +79,7 @@ export function QueueTable({ shopId, items, selectable, canManage }: { shopId: s
       )}
 
       {selectable && canManage && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200/80 bg-white p-3 shadow-sm">
           <button type="button" onClick={() => setSelected(selected.size === items.length ? new Set() : new Set(items.map((i) => i.id)))} className="text-sm text-brand-navy-900 underline-offset-2 hover:underline">
             {selected.size === items.length ? "Clear selection" : "Select all"}
           </button>
@@ -92,7 +92,7 @@ export function QueueTable({ shopId, items, selectable, canManage }: { shopId: s
             <span className="flex flex-wrap items-center gap-2 text-sm text-gray-800">
               Send {selected.size} survey invitation{selected.size === 1 ? "" : "s"} to customers now?
               <button type="button" onClick={send} disabled={pending} className="rounded-lg bg-brand-red px-3 py-1.5 font-semibold text-white disabled:opacity-50">
-                {pending ? "Sendingâ€¦" : "Yes, send"}
+                {pending ? "Sending…" : "Yes, send"}
               </button>
               <button type="button" onClick={() => setConfirming(false)} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-gray-700">
                 Cancel
@@ -102,19 +102,19 @@ export function QueueTable({ shopId, items, selectable, canManage }: { shopId: s
         </div>
       )}
 
-      <div className="relative overflow-x-auto rounded-xl border border-gray-200 bg-white">
+      <div className="relative overflow-x-auto rounded-2xl border border-gray-200/80 bg-white shadow-sm">
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+          <thead className="border-b border-gray-100 bg-gray-50/70 text-[11px] uppercase tracking-wide text-gray-500">
             <tr>
               {selectable && canManage && (
                 <th scope="col" className="px-3 py-2">
                   <span className="sr-only">Select</span>
                 </th>
               )}
-              <th scope="col" className="px-3 py-2 font-medium">Visit</th>
-              <th scope="col" className="px-3 py-2 font-medium">Customer</th>
-              <th scope="col" className="px-3 py-2 font-medium">Delivered</th>
-              <th scope="col" className="px-3 py-2 font-medium">Status</th>
+              <th scope="col" className="px-3 py-3 font-medium">Visit</th>
+              <th scope="col" className="px-3 py-3 font-medium">Customer</th>
+              <th scope="col" className="px-3 py-3 font-medium">Delivered</th>
+              <th scope="col" className="px-3 py-3 font-medium">Status</th>
               {canManage && (
                 <th scope="col" className="px-3 py-2">
                   <span className="sr-only">Actions</span>
@@ -191,37 +191,37 @@ function Row({
 
   return (
     <>
-      <tr>
+      <tr className="hover:bg-gray-50/60">
         {selectable && (
-          <td className="px-3 py-2">
+          <td className="px-3 py-3">
             <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`Select ${item.customerName}, visit ${item.sourceVisitKey}`} className="size-4 accent-brand-red" />
           </td>
         )}
-        <td className="px-3 py-2 font-mono text-xs text-gray-800">
+        <td className="px-3 py-3 font-mono text-xs text-gray-800">
           {item.sourceVisitKey}
           {item.isTest && <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-sans text-[11px] font-medium text-amber-800">Test</span>}
         </td>
-        <td className="px-3 py-2">
-          <span className="text-gray-900">{item.customerName}</span>
+        <td className="px-3 py-3">
+          <span className="font-medium text-gray-900">{item.customerName}</span>
           <span className="block text-xs text-gray-500">{item.email ?? "No email"}</span>
         </td>
-        <td className="whitespace-nowrap px-3 py-2 text-gray-700">
-          {item.deliveredOn ?? (item.deliveredOnRaw ? <span className="text-brand-red-dark">Unreadable: {item.deliveredOnRaw}</span> : <span className="text-gray-400">Missing</span>)}
+        <td className="whitespace-nowrap px-3 py-3 text-gray-700">
+          {item.deliveredOn ?? (item.deliveredOnRaw ? <span className="text-brand-red-dark">Unreadable: {item.deliveredOnRaw}</span> : <span className="text-gray-500">Missing</span>)}
         </td>
-        <td className="px-3 py-2 text-xs text-gray-700">{item.intentState ? `Email ${item.intentState.replace("_", " ")}${item.intentReason ? `: ${item.intentReason}` : ""}` : item.reasons.join("; ") || "Eligible"}</td>
+        <td className="px-3 py-3 text-xs text-gray-700">{item.intentState ? `Email ${item.intentState.replace("_", " ")}${item.intentReason ? `: ${item.intentReason}` : ""}` : item.reasons.join("; ") || "Eligible"}</td>
         {canManage && (
-          <td className="whitespace-nowrap px-3 py-2 text-right">
+          <td className="whitespace-nowrap px-3 py-3 text-right">
             {!item.intentState && (
-              <button type="button" onClick={() => onEdit(!editing)} className="text-sm text-brand-navy-900 underline-offset-2 hover:underline">
+              <button type="button" onClick={() => onEdit(!editing)} className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:border-indigo-300 hover:text-indigo-700">
                 {editing ? "Close" : "Fix details"}
               </button>
             )}
             {item.printable && (
-              <button type="button" onClick={printable} disabled={pending} className="ml-3 text-sm text-brand-navy-900 underline-offset-2 hover:underline disabled:opacity-50">
+              <button type="button" onClick={printable} disabled={pending} className="ml-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50">
                 Printable link
               </button>
             )}
-            <Link href={`/psg/responses/paper?shop=${shopId}&visit=${item.visitId}`} className="ml-3 text-sm text-brand-navy-900 underline-offset-2 hover:underline">
+            <Link href={`/psg/responses/paper?shop=${shopId}&visit=${item.visitId}`} className="ml-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:border-indigo-300 hover:text-indigo-700">
               Paper survey
             </Link>
           </td>
@@ -245,7 +245,7 @@ function Row({
                   <input id={`delivered-${item.id}`} type="date" value={deliveredOn} onChange={(e) => setDeliveredOn(e.target.value)} className={field} />
                 </div>
                 <button type="button" onClick={save} disabled={pending} className="rounded-lg bg-brand-navy-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-                  {pending ? "Savingâ€¦" : "Save"}
+                  {pending ? "Saving…" : "Save"}
                 </button>
                 <p className="w-full text-xs text-gray-500">Saving does not send anything. Use Send afterwards once the record is ready.</p>
                 {item.email && (

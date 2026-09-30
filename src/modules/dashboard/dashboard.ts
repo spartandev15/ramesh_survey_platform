@@ -18,6 +18,9 @@ import * as store from "./store";
 export const LIST_VIEWS = { all: "All", counted: "Counted", pending: "Pending match", negative: "Negative feedback", not_counted: "Not counted" } as const;
 export type ListView = keyof typeof LIST_VIEWS;
 
+/** Ten responses per page, so the list under the charts stays short. */
+const LIST_PAGE_SIZE = 10;
+
 export function listView(value: string | string[] | undefined): ListView {
   return typeof value === "string" && value in LIST_VIEWS ? (value as ListView) : "all";
 }
@@ -53,6 +56,7 @@ export async function getDashboard(shopId: string, filters: DashboardFilters, pa
     const listPage = pageOf(
       rows.filter((r) => inListView(view, categorize(r, shop.isTestShop), r.alerts.length > 0)),
       page,
+      LIST_PAGE_SIZE,
     );
     const items = listPage.items.map((r) => ({
       id: r.id,

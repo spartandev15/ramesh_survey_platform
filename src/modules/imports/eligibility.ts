@@ -20,6 +20,7 @@ export const REASON_LABELS = {
   TEST_RECIPIENT_NOT_ALLOWED: "Test record: address not on the internal test list",
   LEGACY_COVERAGE_UNKNOWN: "Legacy history for this shop not confirmed yet",
   ALREADY_SENT: "Invitation already sent",
+  SURVEY_ANSWERED: "Survey already answered for this visit (link, paper or public form)",
 } as const;
 
 export type ReasonCode = keyof typeof REASON_LABELS;
@@ -44,6 +45,8 @@ export interface VisitFacts {
   legacy: { invited: boolean; completed: boolean } | null;
   optedOut: boolean;
   recipientAllowlisted: boolean;
+  /** A submitted response already exists for the visit, by any source (SR-24). Unknown at import. */
+  answered?: boolean;
 }
 
 /**
@@ -54,6 +57,7 @@ export interface VisitFacts {
  */
 export function sendBlockers(visit: VisitFacts, shop: ShopFacts): ReasonCode[] {
   const reasons: ReasonCode[] = [];
+  if (visit.answered) reasons.push("SURVEY_ANSWERED");
   if (visit.legacy?.completed) reasons.push("LEGACY_COMPLETED");
   else if (visit.legacy?.invited) reasons.push("LEGACY_INVITED");
   if (!visit.isTest && !shop.legacyCoverageConfirmed) reasons.push("LEGACY_COVERAGE_UNKNOWN");
@@ -69,9 +73,9 @@ export function sendBlockers(visit: VisitFacts, shop: ShopFacts): ReasonCode[] {
   return reasons;
 }
 
-/** Legacy evidence excludes a visit for good (SR-08); other reasons can clear. */
+/** Legacy evidence, or an answer already given, excludes a visit for good (SR-08, SR-24); other reasons can clear. */
 export function isExcluded(reasons: readonly ReasonCode[]): boolean {
-  return reasons.includes("LEGACY_COMPLETED") || reasons.includes("LEGACY_INVITED");
+  return reasons.includes("LEGACY_COMPLETED") || reasons.includes("LEGACY_INVITED") || reasons.includes("SURVEY_ANSWERED");
 }
 
 /**

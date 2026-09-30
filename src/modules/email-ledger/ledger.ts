@@ -8,9 +8,14 @@ import * as store from "./store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function listEmailProblems(page: number) {
+export async function listEmailProblems(page: number, filter: store.ProblemFilter = {}, size?: number) {
   await requireCapability("operations.view");
-  return getDb().transaction((tx) => loadPage(page, () => store.countProblems(tx), (offset, size) => store.listProblems(tx, offset, size)));
+  return getDb().transaction((tx) => loadPage(page, () => store.countProblems(tx, filter), (offset, n) => store.listProblems(tx, offset, n, filter), size));
+}
+
+export async function emailProblemCounts() {
+  await requireCapability("operations.view");
+  return getDb().transaction((tx) => store.problemStateCounts(tx));
 }
 
 export async function resolveEmailProblem(intentId: string, resolution: store.Resolution, note: string) {

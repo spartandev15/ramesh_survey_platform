@@ -170,20 +170,20 @@ export function Legend({ items }: { items: { label: string; color: string; value
 }
 
 /** A ring split into parts, with the total in the middle. */
-export function Donut({ parts, total, caption }: { parts: { label: string; value: number; color: string }[]; total: number; caption: string }) {
+export function Donut({ parts, total, caption, size = "size-36", thickness = 5 }: { parts: { label: string; value: number; color: string }[]; total: number; caption: string; size?: string; thickness?: number }) {
   const r = 15.9155; // circumference 100, so dash lengths are percentages
   let offset = 25; // start at twelve o'clock
   return (
-    <div className="relative mx-auto size-36">
+    <div className={`relative mx-auto shrink-0 ${size}`}>
       <svg viewBox="0 0 42 42" className="size-full" aria-hidden="true">
-        <circle cx="21" cy="21" r={r} fill="none" stroke="#eef1f5" strokeWidth="5" />
+        <circle cx="21" cy="21" r={r} fill="none" stroke="#eef1f5" strokeWidth={thickness} />
         {total > 0 &&
           parts
             .filter((p) => p.value > 0)
             .map((p) => {
               const pct = (p.value / total) * 100;
               const el = (
-                <circle key={p.label} cx="21" cy="21" r={r} fill="none" stroke={p.color} strokeWidth="5" strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset={offset}>
+                <circle key={p.label} cx="21" cy="21" r={r} fill="none" stroke={p.color} strokeWidth={thickness} strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset={offset}>
                   <title>{`${p.label}: ${p.value} (${Math.round(pct)}%)`}</title>
                 </circle>
               );
@@ -212,75 +212,42 @@ export function SplitBar({ parts }: { parts: { label: string; value: number; col
   );
 }
 
-/** A small ring filled to a share from 0 to 1. */
-export function Gauge({ value, color }: { value: number; color: string }) {
-  const pct = Math.max(0, Math.min(1, value)) * 100;
+/**
+ * A small trend line with a soft fill and no axes, for KPI cards. Each month
+ * is in the accessible text; the numbers themselves are written on the card.
+ */
+export function Sparkline({ id, values, color, label, className = "h-12 w-28" }: { id: string; values: number[]; color: string; label: string; className?: string }) {
+  if (values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const points = values.map((v, i) => [(i / (values.length - 1)) * W, H - 2 - (v / max) * (H - 6)] as [number, number]);
+  const line = smoothPath(points);
   return (
-    <svg viewBox="0 0 42 42" className="size-14 shrink-0 -rotate-90" aria-hidden="true">
-      <circle cx="21" cy="21" r="15.9155" fill="none" stroke="#eef1f5" strokeWidth="5" />
-      <circle cx="21" cy="21" r="15.9155" fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${pct} ${100 - pct}`} />
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={`overflow-visible ${className}`} role="img" aria-label={label}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${line} L${W},${H} L0,${H} Z`} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
 
-/**
- * A small line chart on a coloured card: white line, white points, light
- * grid. Straight segments so every month reads exactly; each point has a
- * tooltip, and the latest value is written out.
- */
-export function LineCard({ title, labels, values, tone, valueLabel = fmt }: { title: string; labels: string[]; values: number[]; tone: string; valueLabel?: (v: number) => string }) {
-  const max = Math.max(...values, 0);
-  const axis = ticks(0, max === 0 ? 1 : max).slice(0, 5);
-  const top = axis[axis.length - 1] || 1;
-  const x = (i: number) => (values.length === 1 ? 50 : (i / (values.length - 1)) * 100);
-  const y = (v: number) => 100 - (v / top) * 100;
-  // First, middle and last month: enough to read the span without crowding a narrow card.
-  const last = labels.length - 1;
-  const shown = new Set([0, Math.round(last / 2), last]);
+/** Small bars, one per period, the latest in full colour; each bar has a tooltip. */
+export function MiniBars({ labels, values, color, valueLabel = fmt }: { labels: string[]; values: number[]; color: string; valueLabel?: (v: number) => string }) {
+  const max = Math.max(...values, 1);
   return (
-    <section className={`flex min-w-0 flex-col rounded-2xl p-5 text-white shadow-md ${tone}`}>
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-white/85">{title}</h2>
-        <p className="text-xl font-semibold tabular-nums">{valueLabel(values[last] ?? 0)}</p>
-      </div>
-      <p className="text-xs text-white/65">Latest month</p>
-      <div className="mt-4 flex gap-2">
-        <div className="relative h-32 w-8 shrink-0 text-right text-[10px] text-white/70">
-          {axis.map((t) => (
-            <span key={t} className="absolute right-0 -translate-y-1/2" style={{ top: `${y(t)}%` }}>
-              {valueLabel(t)}
-            </span>
-          ))}
-        </div>
-        <div className="relative h-32 flex-1">
-          {axis.map((t) => (
-            <div key={t} aria-hidden="true" className="absolute inset-x-0 border-t border-white/15" style={{ top: `${y(t)}%` }} />
-          ))}
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible" aria-hidden="true">
-            <polyline points={values.map((v, i) => `${x(i)},${y(v)}`).join(" ")} fill="none" stroke="white" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-          </svg>
-          {values.map((v, i) => (
-            <span
-              key={i}
-              title={`${labels[i]}: ${valueLabel(v)}`}
-              className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow"
-              style={{ left: `${x(i)}%`, top: `${y(v)}%` }}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="relative ml-10 mt-2 h-4 text-[10px] text-white/75">
-        {labels.map((l, i) =>
-          shown.has(i) ? (
-            <span key={l} className={`absolute whitespace-nowrap ${i === 0 ? "" : i === last ? "-translate-x-full" : "-translate-x-1/2"}`} style={{ left: `${x(i)}%` }}>
-              {l}
-            </span>
-          ) : null,
-        )}
-      </div>
-      <p className="sr-only">
-        {title}: {labels.map((l, i) => `${l} ${valueLabel(values[i])}`).join(", ")}.
-      </p>
-    </section>
+    <div className="flex h-14 items-end gap-1" role="img" aria-label={labels.map((l, i) => `${l} ${valueLabel(values[i])}`).join(", ")}>
+      {values.map((v, i) => (
+        <span
+          key={labels[i]}
+          title={`${labels[i]}: ${valueLabel(v)}`}
+          className="min-h-[3px] flex-1 rounded-t-[3px]"
+          style={{ height: `${Math.max(5, (v / max) * 100)}%`, background: color, opacity: i === values.length - 1 ? 1 : 0.55 }}
+        />
+      ))}
+    </div>
   );
 }

@@ -83,9 +83,18 @@ Production also needs a server or hosting, a domain, automated database backups 
 | Mode switching in the browser | Pause and Resume are tested in the database tests only: no shop can go Live in the browser tests until verified PSG content exists (G-01) | Add a browser test once the real survey is published |
 | CI browser tests | The CI workflow now runs the full browser suite against a production build; it has not run on GitHub yet | Confirm on the first push |
 
+## 3b. Added at PSG's request (beyond the package wording)
+
+| Feature | Where | Safeguards |
+| --- | --- | --- |
+| Responses CSV: one response, the ticked rows, or every row the filters match | Responses list and a response's page (`/psg/responses/export`) | PSG staff only; audited as `responses.exported`; formula-safe cells; "Export selected" with nothing ticked exports no rows. Test rows are included and marked `test_data`, as on the list |
+| Operator queue CSV | Operator queues (`/psg/operations/export`) | PSG staff only; audited as `operator_queue.exported` |
+| Search, filters, sort and page size on the PSG lists; headline counts | Most PSG pages | Read only. Overview, Shops and Imports totals exclude test data (SR-03); the counts on work queues (responses, alerts, email, suppression) count every item the list shows, test items included and marked, as the lists always have |
+| Development database prune | `npm run db:prune [N]`, worker job when `DEV_PRUNE_KEEP` is set | Development only: refuses `NODE_ENV=production`, real email sending (`EMAIL_PROVIDER` other than `log`), and any database holding a Live or Paused shop or a real response |
+
 ## 4. Demo data
 
-`npm run seed:dashboard` fills an internal test shop, *Demo Collision (internal test)*, for demonstrations and training. It goes through the normal code, never touches production shops, never counts in production reports, and refuses to run in production. It adds:
+`npm run seed:dashboard` (or `npm run seed:dashboard -- --responses 180` for a smaller set) fills an internal test shop, *Demo Collision (internal test)*, for demonstrations and training. It goes through the normal code, never touches production shops, never counts in production reports, and refuses to run in production. It adds:
 
 - six months of dummy responses (online, paper and public) from the demo TEST survey, with the alerts they raise;
 - a year of dummy history before that, standing in for the Supabase history (G-03), on its own scales;

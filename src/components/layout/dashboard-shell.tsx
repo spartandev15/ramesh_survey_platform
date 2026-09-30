@@ -43,6 +43,17 @@ function activeHref(nav: NavItem[], pathname: string) {
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 }
 
+/** Consecutive items with the same group become one sidebar section. */
+function groupNav(nav: NavItem[]) {
+  const sections: { group?: string; items: NavItem[] }[] = [];
+  for (const item of nav) {
+    const last = sections.at(-1);
+    if (last && last.group === item.group) last.items.push(item);
+    else sections.push({ group: item.group, items: [item] });
+  }
+  return sections;
+}
+
 interface DashboardShellProps {
   title: string;
   nav: NavItem[];
@@ -76,6 +87,8 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
   const showClose = isDesktop ? collapsed : mobileOpen;
   const sidebarVisible = isDesktop ? !collapsed : mobileOpen;
   const current = activeHref(nav, pathname);
+  const sections = groupNav(nav);
+  const grouped = sections.some((s) => s.group);
 
   function toggleSidebar() {
     if (!isDesktop) {
@@ -105,7 +118,7 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
         inert={!isDesktop && !mobileOpen}
         className={classes(
           // Below the top bar on small screens so the close button stays visible.
-          "fixed bottom-0 left-0 top-16 z-40 flex w-64 shrink-0 flex-col bg-linear-to-b from-[#15171c] to-[#23272f] text-white shadow-xl shadow-black/10 transition-[width,transform] duration-200",
+          "fixed bottom-0 left-0 top-16 z-40 flex w-64 shrink-0 flex-col bg-sidebar text-white shadow-xl shadow-black/10 transition-[width,transform] duration-200",
           "lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           compact && "lg:w-[76px]",
@@ -121,33 +134,43 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
           </Link>
         </div>
 
-        {!compact && <p className="truncate px-5 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-widest text-white/50">{title}</p>}
+        {!compact && !grouped && <p className="truncate px-5 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-widest text-white/50">{title}</p>}
 
-        <nav aria-label="Workspace" className={classes("flex-1 overflow-y-auto py-3", compact ? "px-2" : "px-3")}>
-          <ul className="flex flex-col gap-1">
-            {nav.map((item) => {
-              const Icon = NAV_ICONS[item.icon];
-              const active = item.href === current;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    title={compact ? item.label : undefined}
-                    aria-current={active ? "page" : undefined}
-                    onClick={closeDrawer}
-                    className={classes(
-                      "flex items-center gap-3 rounded-lg py-2.5 text-sm transition",
-                      compact ? "justify-center px-0" : "px-3",
-                      active ? "bg-white/15 font-medium text-white shadow-inner ring-1 ring-white/15" : "text-white/70 hover:translate-x-0.5 hover:bg-white/10 hover:text-white",
-                    )}
-                  >
-                    <Icon aria-hidden="true" className={classes("size-5 shrink-0", active && "text-brand-red")} />
-                    <span className={compact ? "sr-only" : "truncate"}>{item.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+        <nav aria-label="Workspace" className={classes("sidebar-scroll flex-1 overflow-y-auto py-4", compact ? "px-2" : "px-3")}>
+          {sections.map((section, s) => (
+            <div key={section.group ?? `top-${s}`} className={s > 0 ? "mt-5" : undefined}>
+              {section.group &&
+                (compact ? (
+                  <div aria-hidden="true" className="mx-3 mb-3 border-t border-white/10" />
+                ) : (
+                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">{section.group}</p>
+                ))}
+              <ul className="flex flex-col gap-0.5" aria-label={section.group}>
+                {section.items.map((item) => {
+                  const Icon = NAV_ICONS[item.icon];
+                  const active = item.href === current;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        title={compact ? item.label : undefined}
+                        aria-current={active ? "page" : undefined}
+                        onClick={closeDrawer}
+                        className={classes(
+                          "flex items-center gap-3 rounded-lg py-2 text-[13.5px] transition-colors",
+                          compact ? "justify-center px-0 py-2.5" : "px-3",
+                          active ? "bg-sidebar-active font-medium text-white shadow-md shadow-indigo-950/40" : "text-white/70 hover:bg-white/[0.06] hover:text-white",
+                        )}
+                      >
+                        <Icon aria-hidden="true" strokeWidth={1.75} className={classes("size-[18px] shrink-0", active ? "text-white" : "text-white/60")} />
+                        <span className={compact ? "sr-only" : "truncate"}>{item.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
       </aside>
 

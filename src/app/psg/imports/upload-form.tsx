@@ -1,11 +1,12 @@
 "use client";
 
+import { ArrowUp } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { FormAlert } from "@/components/form/form-alert";
 import { uploadImportAction } from "./actions";
 
-const field = "w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand-navy-700";
+const field = "h-11 w-full rounded-xl border border-gray-300 bg-white px-3.5 text-sm outline-none focus:border-indigo-500";
 
 /** Upload stages the rows only. Nothing is created or sent until PSG reviews the preview and commits. */
 export function UploadForm({ shops, sourceSystems }: { shops: { id: string; name: string; isTestShop: boolean }[]; sourceSystems: [string, string][] }) {
@@ -13,6 +14,9 @@ export function UploadForm({ shops, sourceSystems }: { shops: { id: string; name
   const [shopId, setShopId] = useState(shops[0]?.id ?? "");
   const [error, setError] = useState<{ message: string; issues?: string[] } | null>(null);
   const [pending, startTransition] = useTransition();
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const testShop = shops.find((s) => s.id === shopId)?.isTestShop ?? false;
 
   if (shops.length === 0) return <p className="text-sm text-gray-600">Create a shop first.</p>;
@@ -80,10 +84,45 @@ export function UploadForm({ shops, sourceSystems }: { shops: { id: string; name
         <label htmlFor="file" className="text-sm font-medium text-gray-700">
           CSV file
         </label>
-        <input id="file" name="file" type="file" accept=".csv,text/csv" required className="text-sm" />
+        <input
+          ref={fileInput}
+          id="file"
+          name="file"
+          type="file"
+          accept=".csv,text/csv"
+          required
+          onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+          className="peer sr-only"
+        />
+        {/* The drop area is a second label for the same input, so a click or a dropped file both fill it. */}
+        <label
+          htmlFor="file"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            if (fileInput.current && e.dataTransfer.files.length) {
+              fileInput.current.files = e.dataTransfer.files;
+              setFileName(e.dataTransfer.files[0].name);
+            }
+          }}
+          className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition peer-focus-visible:ring-2 peer-focus-visible:ring-brand-red ${dragging ? "border-indigo-500 bg-indigo-50" : "border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50"}`}
+        >
+          <span className="rounded-full bg-indigo-600 p-2.5 text-white" aria-hidden="true">
+            <ArrowUp className="size-5" />
+          </span>
+          <span className="text-sm font-semibold text-brand-navy-900">{fileName ?? "Drag and drop your CSV file here"}</span>
+          <span className="text-xs text-gray-600">
+            {fileName ? "Choose a different file" : <>or <span className="font-medium text-indigo-700 underline">browse files</span></>}
+          </span>
+        </label>
         <p className="text-xs text-gray-500">First row must hold column names. Up to 5 MB and 5,000 records.</p>
       </div>
-      <button type="submit" disabled={pending} aria-busy={pending} className="rounded-lg bg-brand-red px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-red-dark disabled:opacity-60">
+      <button type="submit" disabled={pending} aria-busy={pending} className="h-11 rounded-xl bg-brand-red px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-red-dark disabled:opacity-60">
         {pending ? "Uploading…" : "Upload and preview"}
       </button>
     </form>

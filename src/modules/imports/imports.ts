@@ -31,9 +31,14 @@ export async function listRejectedFiles() {
   return getDb().transaction((tx) => store.listRejectedFiles(tx));
 }
 
-export async function listImports(page: number) {
+export async function listImports(page: number, oldestFirst = false) {
   await requireCapability("psg.workspace");
-  return getDb().transaction((tx) => loadPage(page, () => store.countBatches(tx), (offset, size) => store.listBatches(tx, offset, size)));
+  return getDb().transaction((tx) => loadPage(page, () => store.countBatches(tx), (offset, size) => store.listBatches(tx, offset, size, oldestFirst), 10));
+}
+
+export async function importTotals() {
+  await requireCapability("psg.workspace");
+  return getDb().transaction((tx) => store.batchTotals(tx));
 }
 
 export async function previewImport(batchId: string) {

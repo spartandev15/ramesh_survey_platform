@@ -15,7 +15,9 @@ export interface ProjectOverview {
   alerts: Record<"pending_review" | "approved" | "dismissed" | "follow_up_open" | "resolved", number>;
   email: Record<"sent" | "waiting" | "problems", number>;
   shops: Record<"test" | "live" | "paused", number>;
-  topShops: { id: string; name: string; responses: number; alerts: number }[];
+  /** Busiest shops over 90 days, with responses per week (oldest first) for a trend line. */
+  topShops: { id: string; name: string; isTest: boolean; responses: number; alerts: number; weekly: number[] }[];
+  recentAlerts: { id: string; shopName: string | null; status: string; createdAt: Date }[];
   totals: { responses: number; lastMonth: number; previousMonth: number };
 }
 
@@ -48,11 +50,23 @@ export async function projectOverview(includeTest: boolean): Promise<ProjectOver
     const shops = await q<{ mode: string; n: number }>(sql`
         SELECT s.mode, count(*) AS n FROM shop_survey_settings s JOIN shop ON shop.id = s.shop_id
         WHERE shop.archived_at IS NULL ${includeTest ? sql`` : sql`AND NOT shop.is_test_shop`} GROUP BY s.mode`);
-    const topShops = await q<{ id: string; name: string; responses: number; alerts: number }>(sql`
-        SELECT shop.id, shop.name, count(DISTINCT r.id) AS responses, count(DISTINCT a.id) AS alerts
+    const topShops = await q<{ id: string; name: string; is_test_shop: boolean; responses: number; alerts: number }>(sql`
+        SELECT shop.id, shop.name, shop.is_test_shop, count(DISTINCT r.id) AS responses, count(DISTINCT a.id) AS alerts
         FROM survey_response r JOIN shop ON shop.id = r.shop_id LEFT JOIN alert_case a ON a.response_id = r.id
         WHERE r.status = 'submitted' AND ${test} AND r.submitted_at >= now() - interval '90 days'
         GROUP BY shop.id, shop.name ORDER BY responses DESC LIMIT 5`);
+    // Weeks back from now: 12 is the oldest of the 13 weeks in 90 days, 0 the current one.
+    const weekly = topShops.rows.length
+      ? await q<{ shop_id: string; w: number; n: number }>(sql`
+        SELECT r.shop_id, floor(extract(epoch FROM now() - r.submitted_at) / 604800)::int AS w, count(*) AS n
+        FROM survey_response r
+        WHERE r.status = 'submitted' AND ${test} AND r.submitted_at >= now() - interval '91 days'
+          AND r.shop_id IN (${sql.join(topShops.rows.map((s) => sql`${s.id}::uuid`), sql`, `)})
+        GROUP BY 1, 2`)
+      : { rows: [] };
+    const recentAlerts = await q<{ id: string; shop_name: string | null; status: string; created_at: string }>(sql`
+        SELECT r.id, shop.name AS shop_name, r.status, r.created_at FROM alert_case r LEFT JOIN shop ON shop.id = r.shop_id
+        WHERE ${test} ORDER BY r.created_at DESC LIMIT 4`);
 
     const by = <K extends string>(rows: { n: number }[], key: (r: never) => string, keys: K[]) => {
       const out = Object.fromEntries(keys.map((k) => [k, 0])) as Record<K, number>;
@@ -84,7 +98,12 @@ export async function projectOverview(includeTest: boolean): Promise<ProjectOver
       },
       email: { sent: emailCount(["accepted", "delivered"]), waiting: emailCount(["queued", "held", "sending"]), problems: emailCount(["bounced", "failed", "acceptance_unknown"]) },
       shops: by(shops.rows, (r: { mode: string }) => r.mode, ["test", "live", "paused"]),
-      topShops: topShops.rows.map((r) => ({ id: r.id, name: r.name, responses: num(r.responses), alerts: num(r.alerts) })),
+      topShops: topShops.rows.map((r) => {
+        const weeks = Array.from({ length: 13 }, () => 0);
+        for (const w of weekly.rows) if (w.shop_id === r.id && w.w >= 0 && w.w < 13) weeks[12 - w.w] += num(w.n);
+        return { id: r.id, name: r.name, isTest: r.is_test_shop, responses: num(r.responses), alerts: num(r.alerts), weekly: weeks };
+      }),
+      recentAlerts: recentAlerts.rows.map((r) => ({ id: r.id, shopName: r.shop_name, status: r.status, createdAt: new Date(r.created_at) })),
       totals: {
         responses: monthRows.reduce((t, r) => t + r.submitted, 0),
         lastMonth: monthRows.at(-1)?.submitted ?? 0,

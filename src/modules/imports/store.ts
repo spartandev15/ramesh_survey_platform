@@ -187,14 +187,24 @@ export async function countBatches(tx: Tx) {
   return row.n;
 }
 
-export async function listBatches(tx: Tx, offset: number, size: number) {
+export async function listBatches(tx: Tx, offset: number, size: number, oldestFirst = false) {
   return tx
     .select({ batch: importBatch, shopName: shop.name })
     .from(importBatch)
     .innerJoin(shop, eq(shop.id, importBatch.shopId))
-    .orderBy(desc(importBatch.createdAt), desc(importBatch.id))
+    .orderBy(...(oldestFirst ? [asc(importBatch.createdAt), asc(importBatch.id)] : [desc(importBatch.createdAt), desc(importBatch.id)]))
     .limit(size)
     .offset(offset);
+}
+
+/** What every committed production upload did, added up; test uploads never add to it (SR-03). */
+export async function batchTotals(tx: Tx): Promise<BatchCounts> {
+  const [row] = await tx.execute<BatchCounts>(sql`
+    SELECT coalesce(sum((counts->>'created')::int), 0)::int AS created, coalesce(sum((counts->>'reused')::int), 0)::int AS reused,
+      coalesce(sum((counts->>'held')::int), 0)::int AS held, coalesce(sum((counts->>'excluded')::int), 0)::int AS excluded,
+      coalesce(sum((counts->>'rejected')::int), 0)::int AS rejected
+    FROM import_batch WHERE counts IS NOT NULL AND NOT is_test`).then((r) => r.rows);
+  return row ?? emptyCounts();
 }
 
 async function listRows(tx: Tx, batchId: string) {

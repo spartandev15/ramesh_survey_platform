@@ -17,7 +17,7 @@ export function ShopPicker({ shops, shopId, view }: { shops: { id: string; name:
           name="shop"
           defaultValue={shopId}
           onChange={(e) => router.push(`/psg/invitations?shop=${e.target.value}&view=${view}`)}
-          className="w-72 max-w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-navy-700"
+          className="h-11 w-96 max-w-full rounded-xl border border-gray-200 bg-white px-3.5 text-sm shadow-sm outline-none focus:border-indigo-500"
         >
           {shops.map((s) => (
             <option key={s.id} value={s.id}>

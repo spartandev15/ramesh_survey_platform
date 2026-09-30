@@ -47,12 +47,29 @@ function viewWhere(view: LegacyView) {
   }
 }
 
-export async function listLegacyCases(tx: Tx, view: LegacyView, offset: number, size: number) {
+/** Words in the case ID, shop, customer, issue or legacy owner. */
+function searchWhere(q: string | undefined) {
+  const words = (q ?? "").split(/\s+/).filter(Boolean);
+  return and(
+    ...words.map((word) => {
+      // LIKE wildcards typed by the user match literally.
+      const like = `%${word.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      return sql`concat_ws(' ', ${legacyCase.sourceRef}, ${shop.name}, ${legacyCase.customerName}, ${legacyCase.summary}, ${legacyCase.legacyOwner}) ILIKE ${like}`;
+    }),
+  );
+}
+
+export async function countLegacyCases(tx: Tx, view: LegacyView, q?: string) {
+  const [row] = await tx.select({ n: sql<number>`count(*)::int` }).from(legacyCase).innerJoin(shop, eq(shop.id, legacyCase.shopId)).where(and(viewWhere(view), searchWhere(q)));
+  return row.n;
+}
+
+export async function listLegacyCases(tx: Tx, view: LegacyView, offset: number, size: number, q?: string) {
   return tx
     .select({ c: legacyCase, shopName: shop.name })
     .from(legacyCase)
     .innerJoin(shop, eq(shop.id, legacyCase.shopId))
-    .where(viewWhere(view))
+    .where(and(viewWhere(view), searchWhere(q)))
     .orderBy(asc(legacyCase.openedOn), asc(legacyCase.createdAt), asc(legacyCase.id))
     .limit(size)
     .offset(offset);

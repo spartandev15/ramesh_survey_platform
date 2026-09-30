@@ -15,13 +15,15 @@ try {
 
 describe.skipIf(!process.env.DATABASE_URL)("email ledger", async () => {
   const { getDb, getPool } = await import("@/db/client");
-  const { accessToken, emailIntent, invitation, shop, shopOptOut, shopSurveySettings, testRecipientAllowlist } = await import("@/db/schema");
+  const { accessToken, emailIntent, invitation, shop, shopOptOut, shopSurveySettings, surveyResponse, testRecipientAllowlist } = await import("@/db/schema");
   const instruments = await import("@/modules/instruments/store");
   const { demoDefinition } = await import("@/modules/instruments/demo-definition");
   const settings = await import("@/modules/shops/settings-store");
   const { settingsInputSchema } = await import("@/modules/shops/settings-policy");
   const imports = await import("@/modules/imports/store");
   const responses = await import("@/modules/responses/store");
+  const staff = await import("@/modules/responses/staff-store");
+  const invitations = await import("@/modules/invitations/store");
   const { EmailAcceptanceUnknownError, EmailRejectedError } = await import("@/modules/email/transport");
   const ledger = await import("./store");
   const { runDispatchCycle } = await import("./dispatcher");
@@ -234,6 +236,26 @@ describe.skipIf(!process.env.DATABASE_URL)("email ledger", async () => {
       expect(provider.sent).toHaveLength(1);
     }));
 
+  it("a paper or public response for the visit stops its invitation and reminder too, not only a link answer (AT-24)", () =>
+    inRollback(async (tx) => {
+      // Paper form for the visit, before the invitation is sent: the invitation never goes out.
+      const paper = await liveShopWithInvitation(tx, "paper@example.com");
+      const provider = new FakeProvider();
+      await staff.submitPaper(tx, actor, { shopId: paper.shop.id, visitId: paper.invitation.visitId, receivedOn: "2026-10-03", answers: complete, requestKey: `paper-${unique()}` }, at(0, 1));
+      expect((await dispatch(tx, provider, T0, [paper.intent.id])).stopped).toEqual(["cancelled:SUBMITTED"]);
+      expect(provider.sent).toHaveLength(0);
+
+      // Invitation sent, then the customer uses the public form and PSG matches it: no reminder follows.
+      const pub = await liveShopWithInvitation(tx, "public@example.com");
+      await dispatch(tx, provider, T0, [pub.intent.id]);
+      expect(provider.sent).toHaveLength(1);
+      await staff.submitPublic(tx, { slug: pub.shop.publicSlug!, versionId: pub.invitation.instrumentVersionId, answers: complete, context: { repairOrder: "1001" }, requestKey: `pub-${unique()}` }, at(1));
+      const [response] = await tx.select().from(surveyResponse).where(eq(surveyResponse.shopId, pub.shop.id));
+      await staff.matchToVisit(tx, actor, response.id, response.matchRevision, pub.invitation.visitId!, "RO matches");
+      await ledger.scheduleReminders(tx, at(8));
+      expect((await intentsOf(tx, pub.invitation.id)).map((i) => i.kind)).toEqual(["initial"]);
+    }));
+
   it("an opt-out before dispatch stops sends at that shop only (AT-24, AT-25)", () =>
     inRollback(async (tx) => {
       const a = await liveShopWithInvitation(tx);
@@ -243,6 +265,8 @@ describe.skipIf(!process.env.DATABASE_URL)("email ledger", async () => {
       expect((await dispatch(tx, provider, T0, [a.intent.id, b.intent.id])).sent).toBe(1);
       expect(provider.sent[0].correlationId).toBe(b.intent.id);
       expect((await tx.select().from(emailIntent).where(eq(emailIntent.id, a.intent.id)))[0]).toMatchObject({ state: "cancelled", stateReason: "SHOP_OPT_OUT" });
+      // A cancelled invitation gets no new printable link either, even asked for directly (SR-40).
+      await expect(invitations.issuePrintableLink(tx, actor, a.shop.id, a.invitation.id)).rejects.toMatchObject({ kind: "invalid" });
       // Idempotent, and a later opt-out recorded elsewhere is still caught at dispatch.
       await ledger.recordOptOut(tx, { type: "respondent" }, a.invitation.id, "respondent_link", T0);
       expect((await tx.select({ n: count() }).from(shopOptOut).where(eq(shopOptOut.shopId, a.shop.id)))[0].n).toBe(1);

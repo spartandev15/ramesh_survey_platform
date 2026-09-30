@@ -240,21 +240,58 @@ function caseWhere(view: CaseView, shopId?: string) {
   );
 }
 
-export async function countCases(tx: Tx, view: CaseView) {
-  const [row] = await tx.select({ n: count() }).from(alertCase).where(caseWhere(view));
+/** List search: words in the shop name or an alert reason; oldest first (the review order) unless asked. */
+export interface CaseSearch {
+  q?: string;
+  shopId?: string;
+  newestFirst?: boolean;
+}
+
+const searchWhere = (search: CaseSearch) =>
+  and(
+    search.shopId ? eq(alertCase.shopId, search.shopId) : undefined,
+    ...(search.q ?? "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => {
+        // LIKE wildcards typed by the user match literally.
+        const like = `%${word.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        return sql`(${shop.name} ILIKE ${like} OR EXISTS (SELECT 1 FROM jsonb_array_elements(${alertCase.alerts}) fired WHERE fired->>'label' ILIKE ${like}))`;
+      }),
+  );
+
+export async function countCases(tx: Tx, view: CaseView, search: CaseSearch = {}) {
+  const [row] = await tx
+    .select({ n: count() })
+    .from(alertCase)
+    .leftJoin(shop, eq(shop.id, alertCase.shopId))
+    .where(and(caseWhere(view), searchWhere(search)));
   return row.n;
 }
 
-export async function listCases(tx: Tx, view: CaseView, offset: number, size: number) {
+export async function listCases(tx: Tx, view: CaseView, offset: number, size: number, search: CaseSearch = {}) {
+  const order = search.newestFirst ? [desc(alertCase.createdAt), desc(alertCase.id)] : [asc(alertCase.createdAt), asc(alertCase.id)];
   return tx
     .select({ case: alertCase, shopName: shop.name, submittedAt: surveyResponse.submittedAt, matchStatus: surveyResponse.matchStatus, source: surveyResponse.source })
     .from(alertCase)
     .innerJoin(surveyResponse, eq(surveyResponse.id, alertCase.responseId))
     .leftJoin(shop, eq(shop.id, alertCase.shopId))
-    .where(caseWhere(view))
-    .orderBy(asc(alertCase.createdAt), asc(alertCase.id))
+    .where(and(caseWhere(view), searchWhere(search)))
+    .orderBy(...order)
     .limit(size)
     .offset(offset);
+}
+
+/** How often each alert reason fired, for the cases in one view; most frequent first. */
+export async function alertReasonCounts(tx: Tx, view: CaseView, limit = 5) {
+  const rows = await tx
+    .select({ label: sql<string>`a->>'label'`, n: sql<number>`count(*)::int` })
+    .from(sql`${alertCase} CROSS JOIN LATERAL jsonb_array_elements(${alertCase.alerts}) a`)
+    .where(caseWhere(view))
+    .groupBy(sql`a->>'label'`)
+    .orderBy(sql`count(*) DESC`, sql`a->>'label'`)
+    .limit(limit);
+  return rows;
 }
 
 export async function caseCounts(tx: Tx) {
@@ -263,6 +300,8 @@ export async function caseCounts(tx: Tx) {
       review: sql<number>`count(*) FILTER (WHERE ${alertCase.status} = 'pending_review')::int`,
       followUp: sql<number>`count(*) FILTER (WHERE ${alertCase.followUp} = 'open')::int`,
       closure: sql<number>`count(*) FILTER (WHERE ${alertCase.followUp} = 'closure_requested')::int`,
+      resolved: sql<number>`count(*) FILTER (WHERE ${alertCase.followUp} = 'resolved')::int`,
+      dismissed: sql<number>`count(*) FILTER (WHERE ${alertCase.status} = 'dismissed')::int`,
     })
     .from(alertCase);
   return row;
@@ -349,13 +388,55 @@ export async function getShopCase(tx: Tx, shopId: string, caseId: string) {
 export const SUPPRESSION_RESULTS = { applied: "Applied in FileMaker", not_needed: "Checked: no change was needed" } as const;
 export type SuppressionResult = keyof typeof SUPPRESSION_RESULTS;
 
-export async function countSuppressions(tx: Tx, status: "outstanding" | "acknowledged") {
-  const [row] = await tx.select({ n: count() }).from(suppressionAction).where(eq(suppressionAction.status, status));
+/** List filters for the suppression queue: change type, shop, raised within N days, and words in the rule, shop or visit. */
+export interface SuppressionSearch {
+  desired?: "apply" | "remove";
+  shopId?: string;
+  sinceDays?: number;
+  q?: string;
+}
+
+const suppressionWhere = (status: "outstanding" | "acknowledged", f: SuppressionSearch) =>
+  and(
+    eq(suppressionAction.status, status),
+    f.desired ? eq(suppressionAction.desired, f.desired) : undefined,
+    f.shopId ? eq(surveyResponse.shopId, f.shopId) : undefined,
+    f.sinceDays ? sql`${suppressionAction.createdAt} >= now() - make_interval(days => ${f.sinceDays})` : undefined,
+    ...(f.q ?? "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => {
+        // LIKE wildcards typed by the user match literally.
+        const like = `%${word.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        return sql`concat_ws(' ', ${suppressionAction.ruleLabel}, ${shop.name}, ${repairVisit.sourceVisitKey}) ILIKE ${like}`;
+      }),
+  );
+
+export async function countSuppressions(tx: Tx, status: "outstanding" | "acknowledged", f: SuppressionSearch = {}) {
+  const [row] = await tx
+    .select({ n: count() })
+    .from(suppressionAction)
+    .innerJoin(surveyResponse, eq(surveyResponse.id, suppressionAction.responseId))
+    .leftJoin(shop, eq(shop.id, surveyResponse.shopId))
+    .leftJoin(repairVisit, eq(repairVisit.id, surveyResponse.visitId))
+    .where(suppressionWhere(status, f));
   return row.n;
 }
 
+/** Headline numbers: what is outstanding, how much was acknowledged in 30 days, and when the oldest open change was raised. */
+export async function suppressionStats(tx: Tx) {
+  const [row] = await tx
+    .select({
+      outstanding: sql<number>`count(*) FILTER (WHERE ${suppressionAction.status} = 'outstanding')::int`,
+      acknowledged30: sql<number>`count(*) FILTER (WHERE ${suppressionAction.status} = 'acknowledged' AND ${suppressionAction.acknowledgedAt} >= now() - interval '30 days')::int`,
+      oldest: sql<string | null>`min(${suppressionAction.createdAt}) FILTER (WHERE ${suppressionAction.status} = 'outstanding')`,
+    })
+    .from(suppressionAction);
+  return { outstanding: row.outstanding, acknowledged30: row.acknowledged30, oldest: row.oldest ? new Date(row.oldest) : null };
+}
+
 /** Without a page this is every outstanding change: the operator queue must never miss one. */
-export async function listSuppressions(tx: Tx, status: "outstanding" | "acknowledged", page?: { offset: number; size: number }) {
+export async function listSuppressions(tx: Tx, status: "outstanding" | "acknowledged", page?: { offset: number; size: number }, f: SuppressionSearch = {}) {
   const rows = tx
     .select({ action: suppressionAction, shopName: shop.name, visitKey: repairVisit.sourceVisitKey, sourceSystem: repairVisit.sourceSystem, ackName: user.name })
     .from(suppressionAction)
@@ -363,7 +444,7 @@ export async function listSuppressions(tx: Tx, status: "outstanding" | "acknowle
     .leftJoin(shop, eq(shop.id, surveyResponse.shopId))
     .leftJoin(repairVisit, eq(repairVisit.id, surveyResponse.visitId))
     .leftJoin(user, eq(user.id, suppressionAction.acknowledgedBy))
-    .where(eq(suppressionAction.status, status))
+    .where(suppressionWhere(status, f))
     .orderBy(status === "outstanding" ? asc(suppressionAction.createdAt) : desc(suppressionAction.acknowledgedAt), asc(suppressionAction.id))
     .$dynamic();
   return page ? rows.limit(page.size).offset(page.offset) : rows;

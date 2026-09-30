@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2, UserPlus } from "lucide-react";
 import { useState, useTransition } from "react";
 import { FormAlert } from "@/components/form/form-alert";
 import { TextField } from "@/components/form/text-field";
@@ -32,7 +33,12 @@ export function AddEntryForm() {
       {added && <FormAlert tone="success">Added {added} to the list.</FormAlert>}
       <TextField id="entry" label="Email address or @domain" value={entry} onChange={(e) => setEntry(e.target.value)} placeholder="name@phoenixsolutionsgroup.net" />
       <TextField id="note" label="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Who this is for" />
-      <button type="submit" disabled={pending || !entry.trim()} className="rounded-lg bg-brand-red px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-red-dark disabled:opacity-60">
+      <button
+        type="submit"
+        disabled={pending || !entry.trim()}
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-red px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-red-dark disabled:opacity-50"
+      >
+        <UserPlus aria-hidden="true" className="size-4" />
         {pending ? "Adding…" : "Add to list"}
       </button>
     </form>
@@ -55,8 +61,9 @@ export function RemoveEntryButton({ id, entry }: { id: string; entry: string }) 
             if (!result.ok) return setError(result.message);
           })
         }
-        className="text-sm text-brand-red hover:underline disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
       >
+        <Trash2 aria-hidden="true" className="size-3.5" />
         {pending ? "Removing…" : "Remove"}
       </button>
       {error && (

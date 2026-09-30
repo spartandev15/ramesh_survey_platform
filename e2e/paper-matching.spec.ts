@@ -85,12 +85,14 @@ test("public, paper, duplicate and correction flows", async ({ page, browser }) 
   await expect(page.getByText("Counted", { exact: true })).toBeVisible();
   const firstPaper = page.url();
 
-  // 4. A second paper form for the same visit waits for duplicate review (AT-19).
+  // 4. The answered visit leaves the send queues (SR-24); a second paper form for it waits for duplicate review (AT-19).
   await page.goto("/psg/invitations");
   await page.getByLabel("Shop", { exact: true }).selectOption({ label: TEST_SHOP.name });
   await page.waitForURL(/shop=/);
-  await page.getByRole("link", { name: /^Held/ }).click();
-  await page.getByRole("row", { name: new RegExp(`${id}-2`) }).getByRole("link", { name: "Paper survey" }).click();
+  await page.getByRole("link", { name: /^Excluded/ }).click();
+  const answered = page.getByRole("row", { name: new RegExp(`${id}-2`) });
+  await expect(answered).toContainText("Survey already answered");
+  await answered.getByRole("link", { name: "Paper survey" }).click();
   await expect(page.getByText("This visit already has a counted response")).toBeVisible();
   await page.getByLabel(/Date the paper form was received/).fill(today);
   await answerDemo(page, "paper", "2");

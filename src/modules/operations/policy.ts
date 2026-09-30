@@ -84,6 +84,82 @@ export function filterItems<T extends Sortable>(items: T[], filter: { owner: Own
   });
 }
 
+const QUEUE_STATUSES = ["all", "overdue", "on_time"] as const;
+type QueueStatus = (typeof QUEUE_STATUSES)[number];
+const QUEUE_SORTS = ["overdue", "oldest", "newest"] as const;
+type QueueSort = (typeof QUEUE_SORTS)[number];
+/** Only items raised within this many days; null is all time. */
+const QUEUE_PERIODS = [7, 30, 90] as const;
+
+export interface QueueSearch {
+  /** Words to find in the title, shop, reason or origin; case does not matter. */
+  q: string;
+  status: QueueStatus;
+  shopId: string | null;
+  /** One named owner, on top of the Everyone / Mine / No owner choice. */
+  ownerId: string | null;
+  sinceDays: (typeof QUEUE_PERIODS)[number] | null;
+  sort: QueueSort;
+}
+
+export function parseQueueSearch(params: Record<string, string | string[] | undefined>): QueueSearch {
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+  const pick = <T extends string>(value: string, allowed: readonly T[], fallback: T): T => ((allowed as readonly string[]).includes(value) ? (value as T) : fallback);
+  // ?overdue=1 is the older spelling of ?status=overdue.
+  const status = pick(one(params.status), QUEUE_STATUSES, one(params.overdue) === "1" ? "overdue" : "all");
+  const days = Number(one(params.since));
+  return {
+    q: one(params.q).trim().slice(0, 100),
+    status,
+    shopId: one(params.shop) || null,
+    ownerId: one(params.who) || null,
+    sinceDays: (QUEUE_PERIODS as readonly number[]).includes(days) ? (days as QueueSearch["sinceDays"]) : null,
+    sort: pick(one(params.sort), QUEUE_SORTS, "overdue"),
+  };
+}
+
+type Searchable = Sortable & { title: string; reason: string; shopName: string | null; shopId: string | null; provenance: string | null };
+
+export function searchItems<T extends Searchable>(items: T[], search: Partial<QueueSearch>, now = new Date()): T[] {
+  const words = (search.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const from = search.sinceDays ? now.getTime() - search.sinceDays * 86_400_000 : null;
+  return items.filter((item) => {
+    if (search.status === "overdue" && !item.overdue) return false;
+    if (search.status === "on_time" && item.overdue) return false;
+    if (search.shopId && item.shopId !== search.shopId) return false;
+    if (search.ownerId && item.owner?.userId !== search.ownerId) return false;
+    if (from !== null && item.since.getTime() < from) return false;
+    if (words.length === 0) return true;
+    const text = [item.title, item.reason, item.shopName, item.provenance].join(" ").toLowerCase();
+    return words.every((w) => text.includes(w));
+  });
+}
+
+/** Overdue first (the default), or simply by how long each item has waited. */
+export function sortItemsBy<T extends Sortable>(items: T[], sort: QueueSort): T[] {
+  if (sort === "overdue") return sortItems(items);
+  const dir = sort === "oldest" ? 1 : -1;
+  return [...items].sort((a, b) => dir * (a.since.getTime() - b.since.getTime()));
+}
+
+/** Open items by age: over 180 days, 90 to 180, 30 to 90, 7 to 30 and under 7. */
+export const AGE_BUCKETS = [
+  { label: "Over 180 days", min: 180 },
+  { label: "90 to 180 days", min: 90 },
+  { label: "30 to 90 days", min: 30 },
+  { label: "7 to 30 days", min: 7 },
+  { label: "Under 7 days", min: 0 },
+] as const;
+
+export function ageBuckets(items: { since: Date }[], now: Date): number[] {
+  const counts = AGE_BUCKETS.map(() => 0);
+  for (const i of items) {
+    const days = Math.max(0, (now.getTime() - i.since.getTime()) / 86_400_000);
+    counts[AGE_BUCKETS.findIndex((b) => days >= b.min)]++;
+  }
+  return counts;
+}
+
 /** Plain-language names for audit actions shown in an item's history. Unknown actions show their code. */
 const HISTORY_LABELS: Record<string, string> = {
   "operator.owner_assigned": "Owner assigned",

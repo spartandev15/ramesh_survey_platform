@@ -53,6 +53,13 @@ export async function getShopSettingsPage(shopId: string) {
   });
 }
 
+/** The survey version new invitations use, for page headers; null when none is assigned. */
+export async function shopSurveyVersion(shopId: string) {
+  await requireCapability("psg.workspace");
+  if (!UUID_RE.test(shopId)) return null;
+  return getDb().transaction(async (tx) => (await store.getSettings(tx, shopId))?.version ?? null);
+}
+
 /** Assign the shop's own published questions, or none (SR-45). PSG admins only. */
 export async function setShopAdditionVersion(shopId: string, expectedRevision: number, versionId: string | null) {
   const { principal } = await requireCapability("shop.manage");

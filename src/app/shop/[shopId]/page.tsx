@@ -21,10 +21,13 @@ export default async function ShopDashboardPage({ params, searchParams }: PagePr
   if (!data) notFound();
 
   return (
-    <div className="max-w-6xl">
-      <h1 className="text-2xl font-semibold text-brand-navy-900">Survey dashboard</h1>
-      <p className="mt-1 text-sm text-gray-500">{shop.name}</p>
-      <div className="mt-6">
+    <div className="mx-auto max-w-7xl">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-semibold text-brand-navy-900 sm:text-[28px]">Survey dashboard</h1>
+        {shop.isTestShop && <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Test data</span>}
+      </div>
+      <p className="mt-1 text-sm text-gray-600">{shop.name}: your customer feedback, trends and what needs action.</p>
+      <div className="mt-5">
         <DashboardView data={data} action={`/shop/${shopId}`} responseHref={(id) => `/shop/${shopId}/responses/${id}`} exportHref={exportQuery(shopId, filters)} />
       </div>
     </div>

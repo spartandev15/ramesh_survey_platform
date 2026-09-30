@@ -120,6 +120,8 @@ export async function allowTestDomain(page: Page, domain: string) {
   await fillUntilEnabled(page, "Email address or @domain", domain, "Add to list");
   await page.getByRole("button", { name: "Add to list" }).click();
   await expect(page.getByText(`Added ${domain} to the list.`).or(page.getByText("That entry is already on the list."))).toBeVisible();
+  // Read the list fresh: the message can show before the refreshed list arrives.
+  await page.reload();
   expect(await findOnPages(page, page.getByRole("cell", { name: domain, exact: true }))).toBe(true);
 }
 

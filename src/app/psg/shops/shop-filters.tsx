@@ -12,7 +12,7 @@ const DEFAULTS: Record<string, string> = { q: "", mode: "all", type: "all", sort
  * pause) and as soon as a filter changes. It is still a plain form, so
  * Enter works without JavaScript too.
  */
-export function ShopFilters({ values, modes, types, sorts }: { values: Record<string, string>; modes: Options; types: Options; sorts: Options }) {
+export function ShopFilters({ values, modes, types, sorts, per }: { values: Record<string, string>; modes: Options; types: Options; sorts: Options; per?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -60,14 +60,16 @@ export function ShopFilters({ values, modes, types, sorts }: { values: Record<st
         e.preventDefault();
         apply();
       }}
-      className="mt-5 flex flex-wrap items-end gap-2 rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
+      className="flex flex-wrap items-end gap-2"
     >
+      {/* Rows per page is chosen under the table; keep it when the filters change. */}
+      {per && <input type="hidden" name="per" value={per} />}
       <label className="relative min-w-48 flex-1">
         <span className="sr-only">Search shops</span>
         {pending ? (
-          <Loader2 aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-gray-400" />
+          <Loader2 aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-gray-500" />
         ) : (
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-500" />
         )}
         <input
           ref={search}
@@ -76,12 +78,12 @@ export function ShopFilters({ values, modes, types, sorts }: { values: Record<st
           defaultValue={values.q}
           maxLength={100}
           autoComplete="off"
-          placeholder="Search by name or public link"
+          placeholder="Search by shop name or public link..."
           onChange={() => {
             clearTimeout(timer.current);
             timer.current = setTimeout(apply, 300);
           }}
-          className="h-10 w-full rounded-lg border border-gray-200 bg-surface pl-9 pr-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-brand-navy-700 focus:bg-white"
+          className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-brand-navy-700 focus:bg-white"
         />
       </label>
       <Select name="mode" label="Mode" value={values.mode} options={modes} onChange={apply} />
@@ -97,16 +99,20 @@ export function ShopFilters({ values, modes, types, sorts }: { values: Record<st
 }
 
 function Select({ name, label, value, options, onChange }: { name: string; label: string; value: string; options: Options; onChange: () => void }) {
+  // Tied by id, so the name read out is just the label, not the chosen option too.
+  const id = `shop-filter-${name}`;
   return (
-    <label className="flex flex-col gap-1 text-xs font-medium text-gray-500">
-      {label}
-      <select name={name} defaultValue={value} onChange={onChange} className="h-10 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-800 outline-none focus:border-brand-navy-700">
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-[11px] font-medium text-gray-500">
+        {label}
+      </label>
+      <select id={id} name={name} defaultValue={value} onChange={onChange} className="h-10 min-w-36 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-800 outline-none focus:border-brand-navy-700">
         {Object.entries(options).map(([k, v]) => (
           <option key={k} value={k}>
             {v}
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }
