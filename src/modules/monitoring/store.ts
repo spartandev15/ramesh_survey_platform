@@ -1,5 +1,5 @@
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import type { Tx } from "@/db/client";
+import { inOrder, type Tx } from "@/db/client";
 import { alertCase, bridgeEvent, emailIntent, invitation, opsNotice, repairVisit, suppressionAction, surveyResponse } from "@/db/schema";
 import { SUPPRESSION_OVERDUE_HOURS } from "@/modules/operations/policy";
 import { ERROR_SPIKE_WINDOW_MINUTES, type DailyCounts, type HealthFacts } from "./policy";
@@ -33,7 +33,8 @@ export async function dailyCounts(tx: Tx, now: Date): Promise<DailyCounts> {
   const overdueBefore = new Date(now.getTime() - SUPPRESSION_OVERDUE_HOURS * 3_600_000);
   const count = sql<number>`count(*)::int`;
 
-  const [[visits], [invitations], [email], [responses], [alerts], [suppression], [bridge]] = await Promise.all([
+  // One transaction is one connection: run the counts one after another, never overlapping.
+  const [[visits], [invitations], [email], [responses], [alerts], [suppression], [bridge]] = await inOrder([
     tx.select({ n: count }).from(repairVisit).where(and(eq(repairVisit.isTest, false), gte(repairVisit.createdAt, since))),
     tx.select({ n: count }).from(invitation).where(and(eq(invitation.isTest, false), gte(invitation.createdAt, since))),
     tx

@@ -14,5 +14,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // Tests trigger failures on purpose (bridge errors, stuck queues); keep their log lines out of the test output.
+    env: { LOG_LEVEL: "error" },
   },
 });

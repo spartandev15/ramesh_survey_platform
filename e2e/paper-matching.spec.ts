@@ -75,7 +75,8 @@ test("public, paper, duplicate and correction flows", async ({ page, browser }) 
   await page.waitForURL(/shop=/);
   await page.getByRole("link", { name: /^Held/ }).click();
   await page.getByRole("row", { name: new RegExp(`${id}-2`) }).getByRole("link", { name: "Paper survey" }).click();
-  await expect(page.getByText(`${id}-2`)).toBeVisible();
+  // The visit shows in the shop and visit card (and again in the entry summary).
+  await expect(page.getByText(`${id}-2`, { exact: true })).toBeVisible();
   const today = new Date().toISOString().slice(0, 10);
   await page.getByLabel(/Date the paper form was received/).fill(today);
   await answerDemo(page, "paper", "4");
