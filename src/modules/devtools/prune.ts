@@ -1,10 +1,15 @@
 import { getPool } from "@/db/client";
 
 /** Why a database must not be pruned: it holds real work. Null when it holds only test and demo data. */
-export async function realDataReason(query: (sql: string) => Promise<{ rows: { live: boolean; real: boolean }[] }>): Promise<string | null> {
-  const { rows } = await query(`SELECT EXISTS (SELECT 1 FROM shop_survey_settings WHERE mode <> 'test') AS live, EXISTS (SELECT 1 FROM survey_response WHERE NOT is_test) AS real`);
+export async function realDataReason(query: (sql: string) => Promise<{ rows: { live: boolean; real: boolean; mailed?: boolean }[] }>): Promise<string | null> {
+  const { rows } = await query(
+    `SELECT EXISTS (SELECT 1 FROM shop_survey_settings WHERE mode <> 'test') AS live,
+            EXISTS (SELECT 1 FROM survey_response WHERE NOT is_test) AS real,
+            EXISTS (SELECT 1 FROM email_intent WHERE NOT is_test AND accepted_at IS NOT NULL) AS mailed`,
+  );
   if (rows[0]?.live) return "a shop is Live or Paused";
   if (rows[0]?.real) return "it holds real (non-test) survey responses";
+  if (rows[0]?.mailed) return "real customers were emailed from it";
   return null;
 }
 

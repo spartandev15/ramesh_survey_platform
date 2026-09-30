@@ -66,6 +66,11 @@ Production also needs a server or hosting, a domain, automated database backups 
 | Monitoring | Stuck-email notice after 15 minutes; error spike at 5 failures in 15 minutes; repeat hourly; daily counts after 07:00 New York time |
 | Dashboard | Charts use days for ranges up to 6 weeks, weeks up to about 7 months, then months; shares (0 to 1) are shown as percentages, stored values unchanged |
 | Capacity | Save and submit p95 within 2 s, results on the dashboard within 5 s, each eligible email within 5 minutes (PDF 07 proposals) |
+| Response rate (PDF 04) | Not shown yet. The package proposes "distinct eligible accepted invitations" as the denominator and says it needs PSG reporting sign-off; the dashboard shows submitted, counted and pending counts until then |
+| Held visits (PDF 03 §2) | The package's "recommended safety policy pending PSG source validation" (a held visit with unknown delivery eligibility accepts no counted response) is not applied: a paper or public response matched to a held visit counts. Confirm with PSG before changing |
+| Resolving a case | Resolving a case raises no suppression release by itself; suppression changes come from the survey's rules on submit and correction. Add a release on resolution once PSG defines the suppression rules (G-04) |
+| Visits imported before Live | After the first switch to Live, visits imported before it are "Ready" but still need PSG to select and send them; nothing sends by itself (PDF 03 "PSG selects waiting invitations deliberately", AT-04) |
+| Test opt-outs | An opt-out from a test email is kept apart and stops only test sends; a real opt-out stops test and real sends at that shop |
 
 ## 3. Changes to confirm under change control
 
@@ -90,7 +95,7 @@ Production also needs a server or hosting, a domain, automated database backups 
 | Responses CSV: one response, the ticked rows, or every row the filters match | Responses list and a response's page (`/psg/responses/export`) | PSG staff only; audited as `responses.exported`; formula-safe cells; "Export selected" with nothing ticked exports no rows. Test rows are included and marked `test_data`, as on the list |
 | Operator queue CSV | Operator queues (`/psg/operations/export`) | PSG staff only; audited as `operator_queue.exported` |
 | Search, filters, sort and page size on the PSG lists; headline counts | Most PSG pages | Read only. Overview, Shops and Imports totals exclude test data (SR-03); the counts on work queues (responses, alerts, email, suppression) count every item the list shows, test items included and marked, as the lists always have |
-| Development database prune | `npm run db:prune [N]`, worker job when `DEV_PRUNE_KEEP` is set | Development only: refuses `NODE_ENV=production`, real email sending (`EMAIL_PROVIDER` other than `log`), and any database holding a Live or Paused shop or a real response |
+| Development database prune | `npm run db:prune [N]`, worker job when `DEV_PRUNE_KEEP` is set | Development only: refuses `NODE_ENV=production`, real email sending (`EMAIL_PROVIDER` other than `log`), and any database with a Live or Paused shop, a real (non-test) response or a real email sent. It still deletes old rows of other kinds, so never point it at a staging copy of real data |
 
 ## 4. Demo data
 

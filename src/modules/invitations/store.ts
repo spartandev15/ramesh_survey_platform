@@ -120,7 +120,7 @@ async function evaluate(tx: Tx, shopId: string, rows: SelectedRow[], facts: Shop
           .from(legacySurveyLedger)
           .where(and(eq(legacySurveyLedger.shopId, shopId), inArray(legacySurveyLedger.sourceVisitKey, keys)))
       : Promise.resolve([]),
-    emails.length ? tx.select({ email: shopOptOut.emailNormalized }).from(shopOptOut).where(and(eq(shopOptOut.shopId, shopId), inArray(shopOptOut.emailNormalized, emails))) : Promise.resolve([]),
+    emails.length ? tx.select({ email: shopOptOut.emailNormalized, isTest: shopOptOut.isTest }).from(shopOptOut).where(and(eq(shopOptOut.shopId, shopId), inArray(shopOptOut.emailNormalized, emails))) : Promise.resolve([]),
     tx.select({ entry: testRecipientAllowlist.entry }).from(testRecipientAllowlist),
     ids.length ? tx.select({ invitationId: emailIntent.invitationId, state: emailIntent.state, reason: emailIntent.stateReason }).from(emailIntent).where(and(inArray(emailIntent.invitationId, ids), eq(emailIntent.kind, "initial"))) : Promise.resolve([]),
     // Answered by link, on paper or the public form: nothing more is sent for that visit (SR-24).
@@ -133,7 +133,9 @@ async function evaluate(tx: Tx, shopId: string, rows: SelectedRow[], facts: Shop
   ]);
   const answered = new Set(answers.flatMap((a) => [a.visitId, a.invitationId].filter((v): v is string => Boolean(v))));
   const legacy = new Map(ledger.map((l) => [`${l.system}\u0000${l.key}`, { invited: true, completed: l.completedOn !== null }]));
-  const opted = new Set(optOuts.map((o) => o.email));
+  // A real opt-out stops every record; one from a test email stops only test records (SR-03).
+  const optedReal = new Set(optOuts.filter((o) => !o.isTest).map((o) => o.email));
+  const optedAny = new Set(optOuts.map((o) => o.email));
   const entries = allowlist.map((a) => a.entry);
   const intentByInvitation = new Map(intents.map((i) => [i.invitationId, i]));
 
@@ -145,7 +147,7 @@ async function evaluate(tx: Tx, shopId: string, rows: SelectedRow[], facts: Shop
         emailNormalized: r.emailNormalized,
         deliveredOn: r.deliveredOn,
         legacy: legacy.get(`${r.sourceSystem}\u0000${r.sourceVisitKey}`) ?? null,
-        optedOut: r.emailNormalized ? opted.has(r.emailNormalized) : false,
+        optedOut: r.emailNormalized ? (r.isTest ? optedAny : optedReal).has(r.emailNormalized) : false,
         recipientAllowlisted: r.emailNormalized ? matchesTestAllowlist(r.emailNormalized, entries) : false,
         answered: isAnswered,
       },

@@ -127,7 +127,7 @@ export async function prepareNext(tx: Tx, owner: string, links: LinkConfig, now:
     .where(and(or(eq(surveyResponse.invitationId, invitationId), eq(surveyResponse.visitId, ctx.visit.id)), eq(surveyResponse.status, "submitted")))
     .limit(1);
   const [optedOut] = recipient
-    ? await tx.select({ id: shopOptOut.id }).from(shopOptOut).where(and(eq(shopOptOut.shopId, ctx.shop.id), eq(shopOptOut.emailNormalized, recipient)))
+    ? await tx.select({ id: shopOptOut.id }).from(shopOptOut).where(and(eq(shopOptOut.shopId, ctx.shop.id), eq(shopOptOut.emailNormalized, recipient), optOutApplies(intent.isTest)))
     : [];
   const allowlist = (await tx.select({ entry: testRecipientAllowlist.entry }).from(testRecipientAllowlist)).map((a) => a.entry);
   const [ledger] = await tx
@@ -362,9 +362,12 @@ export async function cancelAfterSubmission(tx: Tx, invitationId: string, now: D
 // Opt-out (SR-25) and renewal (SR-22)
 // ---------------------------------------------------------------------------
 
+/** Opt-outs that stop a send: a real opt-out stops everything; one from a test email stops only test sends (SR-03). */
+const optOutApplies = (isTestSend: boolean) => (isTestSend ? undefined : eq(shopOptOut.isTest, false));
+
 export async function optOutContext(tx: Tx, invitationId: string) {
   const [row] = await tx
-    .select({ shopId: shop.id, shopName: shop.name, logoUrl: shop.logoUrl, brandColor: shop.brandColor, email: customer.emailNormalized })
+    .select({ shopId: shop.id, shopName: shop.name, logoUrl: shop.logoUrl, brandColor: shop.brandColor, email: customer.emailNormalized, isTest: invitation.isTest })
     .from(invitation)
     .innerJoin(shop, eq(shop.id, invitation.shopId))
     .leftJoin(repairVisit, eq(repairVisit.id, invitation.visitId))
@@ -380,7 +383,7 @@ export async function optOutContext(tx: Tx, invitationId: string) {
 export async function recordOptOut(tx: Tx, actor: Actor | { type: "respondent" }, invitationId: string, source: string, now: Date) {
   const ctx = await optOutContext(tx, invitationId);
   if (!ctx?.email) return { recorded: false };
-  const [created] = await tx.insert(shopOptOut).values({ shopId: ctx.shopId, emailNormalized: ctx.email, source, createdAt: now }).onConflictDoNothing().returning({ id: shopOptOut.id });
+  const [created] = await tx.insert(shopOptOut).values({ shopId: ctx.shopId, emailNormalized: ctx.email, source, isTest: ctx.isTest, createdAt: now }).onConflictDoNothing().returning({ id: shopOptOut.id });
   const cancelled = await tx
     .update(emailIntent)
     .set({ state: "cancelled", stateReason: "SHOP_OPT_OUT", updatedAt: now })
@@ -388,6 +391,8 @@ export async function recordOptOut(tx: Tx, actor: Actor | { type: "respondent" }
       and(
         inArray(emailIntent.state, ["queued", "held"]),
         eq(emailIntent.recipient, ctx.email),
+        // An opt-out from a test email cancels only test sends.
+        ctx.isTest ? eq(emailIntent.isTest, true) : undefined,
         inArray(emailIntent.invitationId, tx.select({ id: invitation.id }).from(invitation).where(eq(invitation.shopId, ctx.shopId))),
       ),
     )
@@ -427,7 +432,7 @@ export async function requestRenewal(tx: Tx, token: string, now: Date): Promise<
   const answered = row.visitId ? or(eq(surveyResponse.invitationId, row.invitationId), eq(surveyResponse.visitId, row.visitId)) : eq(surveyResponse.invitationId, row.invitationId);
   const [submitted] = await tx.select({ id: surveyResponse.id }).from(surveyResponse).where(and(answered, eq(surveyResponse.status, "submitted")));
   if (submitted) return;
-  const [opted] = await tx.select({ id: shopOptOut.id }).from(shopOptOut).where(and(eq(shopOptOut.shopId, row.shopId), eq(shopOptOut.emailNormalized, row.email)));
+  const [opted] = await tx.select({ id: shopOptOut.id }).from(shopOptOut).where(and(eq(shopOptOut.shopId, row.shopId), eq(shopOptOut.emailNormalized, row.email), optOutApplies(row.isTest)));
   if (opted) return;
   const [{ n }] = await tx.select({ n: count() }).from(emailIntent).where(and(eq(emailIntent.invitationId, row.invitationId), eq(emailIntent.kind, "renewal")));
   if (n >= MAX_RENEWALS) return;

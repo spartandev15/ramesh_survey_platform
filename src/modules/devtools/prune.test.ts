@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { pruneDevData, pruneKeep, realDataReason, unsafeSettingsReason } from "./prune";
 
-const answer = (live: boolean, real: boolean) => async () => ({ rows: [{ live, real }] });
+const answer = (live: boolean, real: boolean, mailed = false) => async () => ({ rows: [{ live, real, mailed }] });
 
 describe("development prune", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -33,5 +33,6 @@ describe("development prune", () => {
     expect(await realDataReason(answer(false, false))).toBeNull();
     expect(await realDataReason(answer(true, false))).toMatch(/Live or Paused/);
     expect(await realDataReason(answer(false, true))).toMatch(/real \(non-test\) survey responses/);
+    expect(await realDataReason(answer(false, false, true))).toMatch(/real customers were emailed/);
   });
 });

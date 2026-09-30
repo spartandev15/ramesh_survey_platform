@@ -256,6 +256,18 @@ describe.skipIf(!process.env.DATABASE_URL)("email ledger", async () => {
       expect((await intentsOf(tx, pub.invitation.id)).map((i) => i.kind)).toEqual(["initial"]);
     }));
 
+  it("an opt-out from a test email never stops a real send; a real opt-out does (SR-03, AT-25)", () =>
+    inRollback(async (tx) => {
+      const real = await liveShopWithInvitation(tx, "same@example.com");
+      await tx.insert(shopOptOut).values({ shopId: real.shop.id, emailNormalized: "same@example.com", source: "respondent_link", isTest: true, createdAt: T0 });
+      const provider = new FakeProvider();
+      expect((await dispatch(tx, provider, T0, [real.intent.id])).sent).toBe(1);
+
+      const second = await liveShopWithInvitation(tx, "other@example.com");
+      await tx.insert(shopOptOut).values({ shopId: second.shop.id, emailNormalized: "other@example.com", source: "respondent_link", isTest: false, createdAt: T0 });
+      expect((await dispatch(tx, provider, T0, [second.intent.id])).stopped).toEqual(["cancelled:SHOP_OPT_OUT"]);
+    }));
+
   it("an opt-out before dispatch stops sends at that shop only (AT-24, AT-25)", () =>
     inRollback(async (tx) => {
       const a = await liveShopWithInvitation(tx);

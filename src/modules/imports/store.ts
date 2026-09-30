@@ -277,7 +277,13 @@ async function buildContext(tx: Tx, batch: BatchRow, visits: NormalizedVisit[], 
           .from(legacySurveyLedger)
           .where(and(eq(legacySurveyLedger.shopId, batch.shopId), eq(legacySurveyLedger.sourceSystem, batch.sourceSystem), inArray(legacySurveyLedger.sourceVisitKey, keys)))
       : Promise.resolve([]),
-    emails.length ? tx.select({ email: shopOptOut.emailNormalized }).from(shopOptOut).where(and(eq(shopOptOut.shopId, batch.shopId), inArray(shopOptOut.emailNormalized, emails))) : Promise.resolve([]),
+    emails.length
+      ? tx
+          .select({ email: shopOptOut.emailNormalized })
+          .from(shopOptOut)
+          // A test import honours every opt-out; a real one only real opt-outs (SR-03).
+          .where(and(eq(shopOptOut.shopId, batch.shopId), inArray(shopOptOut.emailNormalized, emails), batch.isTest ? undefined : eq(shopOptOut.isTest, false)))
+      : Promise.resolve([]),
     tx.select({ entry: testRecipientAllowlist.entry }).from(testRecipientAllowlist),
   ]);
   return {
@@ -426,7 +432,8 @@ function planLegacyCase(row: NormalizedLegacyCase, existing: Map<string, { id: s
 async function existingOptOuts(tx: Tx, shopId: string, rows: { emailNormalized: string | null }[]) {
   const emails = [...new Set(rows.map((r) => r.emailNormalized).filter((e): e is string => Boolean(e)))];
   if (emails.length === 0) return new Set<string>();
-  const found = await tx.select({ email: shopOptOut.emailNormalized }).from(shopOptOut).where(and(eq(shopOptOut.shopId, shopId), inArray(shopOptOut.emailNormalized, emails)));
+  // Opt-out lists are production data: only real opt-outs count as already on file.
+  const found = await tx.select({ email: shopOptOut.emailNormalized }).from(shopOptOut).where(and(eq(shopOptOut.shopId, shopId), inArray(shopOptOut.emailNormalized, emails), eq(shopOptOut.isTest, false)));
   return new Set(found.map((f) => f.email));
 }
 

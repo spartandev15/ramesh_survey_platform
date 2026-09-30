@@ -41,7 +41,7 @@ vi.mock("@/modules/access/principal", async () => {
   };
 });
 
-describe.skipIf(!process.env.DATABASE_URL)("PSG CSV exports", async () => {
+describe.skipIf(!process.env.DATABASE_URL)("PSG CSV exports: authorized, audited and formula-safe (AT-38, AT-40)", async () => {
   const { getDb, getPool } = await import("@/db/client");
   const { auditEvent, shop, shopSurveySettings, surveyResponse, user } = await import("@/db/schema");
   const instruments = await import("@/modules/instruments/store");

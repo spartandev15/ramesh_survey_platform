@@ -198,6 +198,15 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
       expect(intents.every((i) => i.email_intent.kind === "initial")).toBe(true);
     }));
 
+  it("a submitted paper form's received date and respondent details are locked (SR-17, SR-18)", () =>
+    inRollback(async (tx) => {
+      const { shop: s } = await shopWithVisits(tx, ["L1,Lo,Cked,lo@example.com"]);
+      const paper = await staff.submitPaper(tx, actor, { shopId: s.id, visitId: null, receivedOn: "2026-09-20", answers: complete, requestKey: `k-${unique()}` });
+      const change = (set: Partial<typeof surveyResponse.$inferInsert>) => tx.transaction((inner) => inner.update(surveyResponse).set(set).where(eq(surveyResponse.id, paper.responseId)));
+      await expect(change({ receivedOn: "2020-01-01" })).rejects.toThrow();
+      await expect(change({ respondentContext: { name: "Someone else" } })).rejects.toThrow();
+    }));
+
   it("a visit answered on paper leaves the invitation queue and gets no printable link (SR-24)", () =>
     inRollback(async (tx) => {
       // No email, so the visit is held with no invitation email yet.

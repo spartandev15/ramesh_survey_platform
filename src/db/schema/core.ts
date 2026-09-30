@@ -348,9 +348,11 @@ export const shopOptOut = pgTable(
       .references(() => shop.id),
     emailNormalized: text("email_normalized").notNull(),
     source: text("source").notNull(),
+    // From a test email: stops only test sends, never a real customer's (SR-03). A real opt-out stops both.
+    isTest: boolean("is_test").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("shop_opt_out_unique").on(t.shopId, t.emailNormalized)],
+  (t) => [uniqueIndex("shop_opt_out_unique").on(t.shopId, t.emailNormalized, t.isTest)],
 );
 
 export const invitationStatus = pgEnum("invitation_status", ["eligible", "held", "excluded"]);
