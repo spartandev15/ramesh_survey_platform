@@ -53,6 +53,8 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
   const requestKey = useRef<string>(crypto.randomUUID());
   const headingRef = useRef<HTMLHeadingElement>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
+  // Focus to move once the given page is on screen: the URL change renders it a little later than our own state.
+  const pendingFocus = useRef<{ to: "heading" | "summary"; page: number } | null>(null);
 
   const questions = useMemo(() => allQuestions(definition), [definition]);
   const byId = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions]);
@@ -133,6 +135,16 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
 
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
 
+  useEffect(() => {
+    const want = pendingFocus.current;
+    if (!want || want.page !== position) return;
+    const target = want.to === "summary" ? errorSummaryRef.current : headingRef.current;
+    if (!target) return;
+    pendingFocus.current = null;
+    if (want.to === "heading") window.scrollTo({ top: 0 });
+    target.focus();
+  });
+
   function isRequired(questionId: string): boolean {
     const q = byId.get(questionId);
     if (!q) return false;
@@ -149,20 +161,17 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
     return map;
   }
 
-  function showErrors(map: Map<string, string>) {
+  /** Show the errors on `page` (default: this one) and move focus to the summary so keyboard and screen reader users hear it (SR-39). */
+  function showErrors(map: Map<string, string>, page = position) {
     setErrors(map);
-    // Move focus to the error summary so keyboard and screen reader users hear it (SR-39).
-    requestAnimationFrame(() => errorSummaryRef.current?.focus());
+    pendingFocus.current = { to: "summary", page };
   }
 
   function goTo(nextPosition: number) {
     setErrors(new Map());
     setSubmitError(null);
     setPageIndex(nextPosition);
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: 0 });
-      headingRef.current?.focus();
-    });
+    pendingFocus.current = { to: "heading", page: nextPosition };
   }
 
   function next() {
@@ -183,10 +192,10 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
       const target = pages.findIndex(({ page }) => page.questions.some((q) => missed.has(q.id)));
       if (target >= 0 && target !== position) {
         setPageIndex(target);
-        requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+        window.scrollTo({ top: 0 });
       }
       const onTarget = new Set(target >= 0 ? pages[target].page.questions.map((q) => q.id) : []);
-      return showErrors(new Map([...missed].filter(([id]) => onTarget.has(id))));
+      return showErrors(new Map([...missed].filter(([id]) => onTarget.has(id))), target >= 0 ? target : position);
     }
 
     setSubmitting(true);
@@ -211,7 +220,7 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
         const map = new Map(result.errors.map((e) => [e.questionId, e.message]));
         const target = pages.findIndex(({ page }) => page.questions.some((q) => map.has(q.id)));
         if (target >= 0 && target !== position) setPageIndex(target);
-        showErrors(map);
+        showErrors(map, target >= 0 ? target : position);
       } else {
         setSubmitError(result.reason === "rate_limited" ? "Too many attempts. Please wait a minute and try again." : "Your survey could not be submitted.");
       }
