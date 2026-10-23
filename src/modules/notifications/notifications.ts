@@ -26,9 +26,9 @@ export async function noticesFor(shopId: string | null): Promise<Notice[]> {
     { label: "Closure requests from shops", count: cases.closure, href: "/psg/alerts?view=closure_requested" },
   ];
   if (hasCapability(principal, "operations.view")) {
-    const { overdue, health } = await operatorQueueSummary();
+    const { overdueExceptWorker, health } = await operatorQueueSummary();
     notices.push(
-      { label: "Operator items overdue", count: overdue, href: "/psg/operations" },
+      { label: "Operator items overdue", count: overdueExceptWorker, href: "/psg/operations" },
       { label: "Survey emails to review", count: health.email.problems, href: "/psg/email" },
       { label: "Background worker not running", count: health.worker.healthy ? 0 : 1, href: "/psg/operations?kind=worker" },
       { label: "FileMaker bridge problems", count: health.bridge.problems, href: "/psg/bridge" },

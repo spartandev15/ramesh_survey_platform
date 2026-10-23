@@ -223,6 +223,11 @@ describe.skipIf(!process.env.DATABASE_URL)("operator queues", async () => {
       expect(after.email.queued).toBe(before.email.queued + 1);
       expect(after.email.oldestDue).not.toBeNull();
       expect(typeof after.bridge.waiting).toBe("number");
+      // Held needs a release, so it counts; a bounce is final and must not keep the count up forever.
+      await tx.update(emailIntent).set({ state: "held" }).where(eq(emailIntent.id, intentId!));
+      expect((await ops.healthSnapshot(tx)).email.problems).toBe(before.email.problems + 1);
+      await tx.update(emailIntent).set({ state: "bounced" }).where(eq(emailIntent.id, intentId!));
+      expect((await ops.healthSnapshot(tx)).email.problems).toBe(before.email.problems);
       // Two days from now nobody has heard from the worker.
       expect((await ops.healthSnapshot(tx, new Date(Date.now() + 48 * 3_600_000))).worker.healthy).toBe(false);
     }));

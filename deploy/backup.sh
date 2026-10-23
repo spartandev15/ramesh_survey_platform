@@ -12,4 +12,6 @@ file="$BACKUP_DIR/psg_survey-$(date -u +%Y%m%dT%H%M%SZ).dump"
 pg_dump --format=custom --no-owner --file="$file.part" "$DATABASE_URL"
 mv "$file.part" "$file"
 find "$BACKUP_DIR" -name 'psg_survey-*.dump' -mtime +"$KEEP_DAYS" -delete
+# Partial files left by a failed run.
+find "$BACKUP_DIR" -name 'psg_survey-*.dump.part' -mmin +60 -delete
 echo "$(date -u +%FT%TZ) backup ok: $file ($(du -h "$file" | cut -f1))"

@@ -40,7 +40,15 @@ export async function operatorQueueSummary() {
   await requireCapability("operations.view");
   return getDb().transaction(async (tx) => {
     const items = await store.listOperatorItems(tx, new Date(), { history: false, includeTest: false });
-    return { open: items.length, overdue: items.filter((i) => i.overdue).length, unowned: items.filter((i) => !i.owner).length, health: await store.healthSnapshot(tx) };
+    const overdue = items.filter((i) => i.overdue);
+    return {
+      open: items.length,
+      overdue: overdue.length,
+      // The stopped worker has its own notice in the bell; counting it here too would show one problem twice.
+      overdueExceptWorker: overdue.filter((i) => i.kind !== "worker").length,
+      unowned: items.filter((i) => !i.owner).length,
+      health: await store.healthSnapshot(tx),
+    };
   });
 }
 

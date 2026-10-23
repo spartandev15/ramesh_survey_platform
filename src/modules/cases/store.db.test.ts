@@ -138,6 +138,16 @@ describe.skipIf(!process.env.DATABASE_URL)("alerts, cases and suppression", asyn
       expect(await dispatch(tx, intents.map((i) => i.intent.id))).toHaveLength(0);
     }));
 
+  it("shop search finds approved cases by alert reason, never by the stored JSON around it", () =>
+    inRollback(async (tx) => {
+      const { shop: s } = await liveShop(tx, ["S1"]);
+      const c = await caseFor(tx, await submitOnline(tx, s.id, "S1", low));
+      expect(await cases.searchShopCases(tx, s.id, "overall")).toHaveLength(0);
+      await cases.approveAndSend(tx, actor, c.id, c.revision, ["owner@shop.example"], "");
+      expect((await cases.searchShopCases(tx, s.id, "LOW OVERALL")).map((r) => r.id)).toEqual([c.id]);
+      for (const words of ["label", "precedence", "low_overall", "1", '"']) expect(await cases.searchShopCases(tx, s.id, words)).toHaveLength(0);
+    }));
+
   it("an unknown shop must be confirmed before outreach; test alerts reach only internal addresses", () =>
     inRollback(async (tx) => {
       const { shop: s, version } = await liveShop(tx, []);

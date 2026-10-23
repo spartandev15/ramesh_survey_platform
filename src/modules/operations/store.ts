@@ -390,7 +390,8 @@ export async function healthSnapshot(tx: Tx, now = new Date()) {
       queued: sql<number>`count(*) FILTER (WHERE ${emailIntent.state} = 'queued' AND ${emailIntent.dueAt} <= ${now})::int`,
       oldestDue: sql<Date | null>`min(${emailIntent.dueAt}) FILTER (WHERE ${emailIntent.state} = 'queued' AND ${emailIntent.dueAt} <= ${now})`,
       sent24h: sql<number>`count(*) FILTER (WHERE ${emailIntent.state} IN ('accepted', 'delivered') AND ${emailIntent.acceptedAt} > ${new Date(now.getTime() - 86_400_000)})::int`,
-      problems: sql<number>`count(*) FILTER (WHERE ${emailIntent.state} IN ('failed', 'bounced', 'acceptance_unknown'))::int`,
+      // Only states PSG can act on (release, confirm, retry); a bounce is final and would never clear.
+      problems: sql<number>`count(*) FILTER (WHERE ${emailIntent.state} IN ('held', 'failed', 'acceptance_unknown'))::int`,
     })
     .from(emailIntent)
     .where(eq(emailIntent.isTest, false));

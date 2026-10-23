@@ -369,7 +369,8 @@ export async function searchShopCases(tx: Tx, shopId: string, words: string, lim
   return tx
     .select({ id: alertCase.id, alerts: alertCase.alerts, followUp: alertCase.followUp, createdAt: alertCase.createdAt })
     .from(alertCase)
-    .where(and(shopCaseWhere(shopId), sql`position(lower(${words}) in lower(${alertCase.alerts}::text)) > 0`))
+    // Match the reason labels only, not the JSON keys and ids around them.
+    .where(and(shopCaseWhere(shopId), sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${alertCase.alerts}) fired WHERE position(lower(${words}) in lower(fired->>'label')) > 0)`))
     .orderBy(desc(alertCase.createdAt))
     .limit(limit);
 }
