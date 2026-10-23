@@ -7,7 +7,7 @@ How to run PSG Hub Surveys in production and what PSG operations does each day. 
 | Process | Command | What it does |
 | --- | --- | --- |
 | Web app | `npm run build` then `npm run start` | Staff pages, shop dashboards, customer surveys, APIs |
-| Worker | `npm run worker` | Sends survey and alert emails, schedules reminders, runs the FileMaker bridge when it is switched on, sends operations notices |
+| Worker | `npm run worker` locally; `node --conditions=react-server --import tsx src/worker/index.ts` in production (no npm process kept in memory) | Sends survey and alert emails, schedules reminders, runs the FileMaker bridge when it is switched on, sends operations notices |
 | Migrations | `npm run db:migrate` | Applies the SQL in `drizzle/` in order; run before starting a new release |
 
 Run exactly one or more workers next to the web app. Several workers are safe: every send is claimed with a lease, and notices and the daily report are sent once. **Restart the worker after every deploy**: it does not reload code.

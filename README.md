@@ -134,7 +134,7 @@ the background worker must run continuously.
 docker build -t psg-survey .
 docker run --env-file .env psg-survey npm run db:migrate   # once per release
 docker run --env-file .env -p 3000:3000 psg-survey         # web
-docker run --env-file .env psg-survey npm run worker       # worker
+docker run --env-file .env psg-survey node --conditions=react-server --import tsx src/worker/index.ts   # worker
 ```
 
 Or run the whole stack on one server with `docker compose --profile app up -d`.

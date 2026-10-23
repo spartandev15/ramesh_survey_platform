@@ -1,23 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { isAccessError } from "@/modules/access/errors";
+import { act } from "@/lib/action";
 import { assignOperatorOwner, reviewOperatorItem } from "@/modules/operations/operations";
 import { OperationsError } from "@/modules/operations/store";
 
-export type OperationsActionResult = { ok: true } | { ok: false; message: string };
-
-async function run(body: () => Promise<unknown>, denied: string): Promise<OperationsActionResult> {
-  try {
-    await body();
-    revalidatePath("/psg/operations");
-    revalidatePath("/psg");
-    return { ok: true };
-  } catch (error) {
-    if (error instanceof OperationsError) return { ok: false, message: error.message };
-    if (isAccessError(error)) return { ok: false, message: denied };
-    throw error;
-  }
+function run(body: () => Promise<unknown>, denied: string) {
+  return act(body, OperationsError, ["/psg/operations", "/psg"], denied);
 }
 
 export async function assignOwnerAction(subjectType: string, subjectId: string, ownerUserId: string | null, revision: number) {

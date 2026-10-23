@@ -1,8 +1,16 @@
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { inOrder, type Tx } from "@/db/client";
-import { alertCase, bridgeEvent, emailIntent, invitation, opsNotice, repairVisit, suppressionAction, surveyResponse } from "@/db/schema";
+import { alertCase, bridgeEvent, emailIntent, invitation, opsNotice, rateLimit, repairVisit, session, suppressionAction, surveyResponse, verification } from "@/db/schema";
 import { SUPPRESSION_OVERDUE_HOURS } from "@/modules/operations/policy";
 import { ERROR_SPIKE_WINDOW_MINUTES, type DailyCounts, type HealthFacts } from "./policy";
+
+/** Keeps the database small: expired sign-ins and reset links, and rate-limit counters idle for a day (the longest window is an hour). */
+export async function removeExpired(tx: Tx, now: Date) {
+  const sessions = await tx.delete(session).where(lt(session.expiresAt, now));
+  const links = await tx.delete(verification).where(lt(verification.expiresAt, now));
+  const limits = await tx.delete(rateLimit).where(lt(rateLimit.lastRequest, now.getTime() - 24 * 60 * 60 * 1000));
+  return { sessions: sessions.rowCount ?? 0, links: links.rowCount ?? 0, limits: limits.rowCount ?? 0 };
+}
 
 /** Facts for the queue-health check. Production only: test sends never page anyone. */
 export async function healthFacts(tx: Tx, now: Date): Promise<HealthFacts> {

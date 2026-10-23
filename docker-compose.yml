@@ -52,7 +52,8 @@ services:
   worker:
     profiles: ["app"]
     build: .
-    command: ["npm", "run", "worker"]
+    # node directly: no npm process held in memory for the life of the worker.
+    command: ["node", "--conditions=react-server", "--import", "tsx", "src/worker/index.ts"]
     env_file: .env
     environment:
       DATABASE_URL: postgres://psg:${POSTGRES_PASSWORD:-psg}@db:5432/psg_survey

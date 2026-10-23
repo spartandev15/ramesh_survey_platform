@@ -1,7 +1,6 @@
 import { Activity, AlertTriangle, ArrowLeftRight, BarChart3, Calendar, CheckCircle2, ChevronRight, CircleX, ListChecks, Mail, MessageSquareWarning, Store, Target, TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { Donut, Legend, MiniBars, Sparkline, SplitBar, TrendChart } from "@/components/dashboard/charts";
-import { Tour } from "@/components/tour";
 import { pageRequireCapability } from "@/modules/access/page-guards";
 import { operatorQueueSummary } from "@/modules/operations/operations";
 import { projectOverview } from "@/modules/operations/overview";
@@ -42,19 +41,6 @@ const C = {
   other: "var(--color-chart-other)",
 };
 
-const TOUR = [
-  { target: "test-data", title: "Production or test data", text: "Numbers show production data only. Switch here to include internal test and demo shops." },
-  { target: "kpis", title: "Headline numbers", text: "Responses over the last 12 months, this month against last month, the share matched to a visit and negative feedback." },
-  { target: "work", title: "Work waiting", text: "Active shops, operator items and alerts that need review. Click a tile to open that queue." },
-  { target: "trend", title: "Responses trend", text: "Submitted, matched and negative responses month by month. Hover a point to see its numbers." },
-  { target: "sources", title: "Where responses came from", text: "How many came from the emailed link, paper forms and the public form." },
-  { target: "months", title: "Month by month", text: "The latest month for responses, negative feedback, survey emails and match rate, with the last 12 months as bars." },
-  { target: "pipelines", title: "Matching, alerts and email", text: "Where each piece of work stands. Use the links to match responses, review alerts or check email." },
-  { target: "top-shops", title: "Busiest shops", text: "Shops with the most responses in the last 90 days. The arrow opens that shop’s dashboard." },
-  { target: "recent-alerts", title: "Recent alerts", text: "The newest negative feedback. Click one to review it." },
-  { target: "health", title: "System health", text: "Survey email, the background worker and the FileMaker bridge. Red means someone should take a look." },
-];
-
 const ALERT_STATUS: Record<string, { title: string; icon: LucideIcon; tone: string }> = {
   pending_review: { title: "Negative feedback received", icon: AlertTriangle, tone: "bg-rose-50 text-rose-600" },
   approved: { title: "Alert approved and sent", icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-600" },
@@ -91,7 +77,6 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
           <p className="mt-1 text-sm text-gray-500">Here&apos;s what&apos;s happening across all shops.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Tour id="overview" steps={TOUR} />
           <Link
             data-tour="test-data"
             href={includeTest ? "/psg" : "/psg?test=1"}
@@ -231,57 +216,9 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
 
       {/* Pipelines */}
       <div data-tour="pipelines" className="grid gap-4 md:grid-cols-3">
-        <Card title="Matching">
-          <SplitBar
-            parts={[
-              { label: "Matched", value: matching.matched, color: C.counted },
-              { label: "Waiting", value: matching.pending, color: C.pending },
-              { label: "Duplicate review", value: matching.duplicate, color: C.other },
-            ]}
-          />
-          <Legend
-            items={[
-              { label: "Matched", color: C.counted, value: matching.matched },
-              { label: "Waiting", color: C.pending, value: matching.pending },
-              { label: "Duplicate review", color: C.other, value: matching.duplicate },
-            ]}
-          />
-          <CardLink href="/psg/responses">Match responses</CardLink>
-        </Card>
-        <Card title="Negative feedback">
-          <SplitBar
-            parts={[
-              { label: "To review", value: alerts.pending_review, color: C.negative },
-              { label: "Approved", value: alerts.approved, color: C.counted },
-              { label: "Dismissed", value: alerts.dismissed, color: C.other },
-            ]}
-          />
-          <Legend
-            items={[
-              { label: "To review", color: C.negative, value: alerts.pending_review },
-              { label: "Approved", color: C.counted, value: alerts.approved },
-              { label: "Dismissed", color: C.other, value: alerts.dismissed },
-            ]}
-          />
-          <CardLink href="/psg/alerts">Open alert review</CardLink>
-        </Card>
-        <Card title="Survey email">
-          <SplitBar
-            parts={[
-              { label: "Sent", value: email.sent, color: C.counted },
-              { label: "Waiting", value: email.waiting, color: C.pending },
-              { label: "To review", value: email.problems, color: C.negative },
-            ]}
-          />
-          <Legend
-            items={[
-              { label: "Sent", color: C.counted, value: email.sent },
-              { label: "Waiting", color: C.pending, value: email.waiting },
-              { label: "To review", color: C.negative, value: email.problems },
-            ]}
-          />
-          <CardLink href="/psg/email">Open email review</CardLink>
-        </Card>
+        <Split title="Matching" href="/psg/responses" link="Match responses" parts={[["Matched", matching.matched, C.counted], ["Waiting", matching.pending, C.pending], ["Duplicate review", matching.duplicate, C.other]]} />
+        <Split title="Negative feedback" href="/psg/alerts" link="Open alert review" parts={[["To review", alerts.pending_review, C.negative], ["Approved", alerts.approved, C.counted], ["Dismissed", alerts.dismissed, C.other]]} />
+        <Split title="Survey email" href="/psg/email" link="Open email review" parts={[["Sent", email.sent, C.counted], ["Waiting", email.waiting, C.pending], ["To review", email.problems, C.negative]]} />
       </div>
 
       {/* Busiest shops and recent alerts */}
@@ -497,11 +434,17 @@ function Card({ title, className = "", aside, tour, children }: { title: string;
   );
 }
 
-function CardLink({ href, children }: { href: string; children: React.ReactNode }) {
+/** A card with one stacked bar, its legend with counts, and a link to the work. */
+function Split({ title, href, link, parts }: { title: string; href: string; link: string; parts: [string, number, string][] }) {
+  const items = parts.map(([label, value, color]) => ({ label, value, color }));
   return (
-    <Link href={href} className="mt-auto pt-1 text-xs font-medium text-indigo-600 hover:underline">
-      {children} →
-    </Link>
+    <Card title={title}>
+      <SplitBar parts={items} />
+      <Legend items={items} />
+      <Link href={href} className="mt-auto pt-1 text-xs font-medium text-indigo-600 hover:underline">
+        {link} →
+      </Link>
+    </Card>
   );
 }
 

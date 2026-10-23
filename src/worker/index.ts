@@ -15,7 +15,7 @@ import { configuredAdapter } from "@/modules/bridge/adapter";
 import { runBridgeCycle } from "@/modules/bridge/sync";
 import { runDispatchCycle, runReminderScheduler } from "@/modules/email-ledger/dispatcher";
 import { pruneDevData, pruneKeep } from "@/modules/devtools/prune";
-import { opsRecipients, runDailyReport, runHealthCheck, type Notify } from "@/modules/monitoring/monitoring";
+import { opsRecipients, runCleanup, runDailyReport, runHealthCheck, type Notify } from "@/modules/monitoring/monitoring";
 
 const QUEUES = {
   heartbeat: "system.heartbeat",
@@ -45,6 +45,8 @@ async function main() {
   await boss.start();
 
   for (const queue of Object.values(QUEUES)) await boss.createQueue(queue);
+  // The heartbeat runs every minute and only its latest run matters: keep a day of it, not the default week.
+  await boss.updateQueue(QUEUES.heartbeat, { deleteAfterSeconds: 24 * 60 * 60 });
   await boss.schedule(QUEUES.heartbeat, "* * * * *");
   await boss.schedule(QUEUES.emailDispatch, "* * * * *");
   await boss.schedule(QUEUES.emailReminders, "*/5 * * * *");
@@ -81,6 +83,8 @@ async function main() {
   });
   await boss.work(QUEUES.opsDaily, async () => {
     if (await runDailyReport(notify)) logger.info("daily counts report sent");
+    const removed = await runCleanup();
+    if (Object.values(removed).some((n) => n > 0)) logger.info({ removed }, "expired rows removed");
   });
 
   await boss.work(QUEUES.devPrune, async () => {

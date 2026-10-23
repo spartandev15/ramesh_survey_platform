@@ -1,9 +1,10 @@
-import { AlertTriangle, CheckCircle2, Clock, Info, MoreHorizontal, Search, Store, type LucideIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Info, MoreHorizontal, Search, Store } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LiveForm } from "@/components/live-form";
 import { hasCapability } from "@/modules/access/capabilities";
 import { Pagination } from "@/components/pagination";
+import { Tile } from "@/components/ui";
 import { pageNumber } from "@/lib/pagination";
 import { pageRequireCapability } from "@/modules/access/page-guards";
 import { listSuppressions, suppressionStats } from "@/modules/cases/cases";
@@ -63,7 +64,7 @@ export default async function SuppressionPage({ searchParams }: PageProps<"/psg/
       </nav>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div data-tour="tiles" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Tile icon={AlertTriangle} tone="bg-rose-50 text-rose-600" value={String(stats.outstanding)} label="Outstanding" note="Need applying in FileMaker" />
           <Tile icon={CheckCircle2} tone="bg-indigo-50 text-indigo-600" value={String(stats.acknowledged30)} label="Acknowledged" note="Last 30 days" />
           <Tile icon={Clock} tone="bg-amber-50 text-amber-600" value={oldestDays === null ? "None" : `${oldestDays} day${oldestDays === 1 ? "" : "s"}`} label="Oldest item" note={stats.oldest ? dateOnly.format(stats.oldest) : "Nothing waiting"} />
@@ -221,21 +222,6 @@ export default async function SuppressionPage({ searchParams }: PageProps<"/psg/
         <div className="px-5 pb-4">
           <Pagination {...list} path="/psg/suppression" query={base} label="Suppression pages" />
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Tile({ icon: Icon, tone, value, label, note }: { icon: LucideIcon; tone: string; value: string; label: string; note: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm">
-      <span className={`rounded-full p-3 ${tone}`} aria-hidden="true">
-        <Icon className="size-5" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xl font-semibold tabular-nums text-brand-navy-900">{value}</p>
-        <p className="text-sm font-medium text-gray-800">{label}</p>
-        <p className="truncate text-xs text-gray-500">{note}</p>
       </div>
     </div>
   );

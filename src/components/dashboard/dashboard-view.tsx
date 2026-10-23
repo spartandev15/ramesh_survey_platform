@@ -49,20 +49,6 @@ function halfChange(points: { value: number; weight: number }[]): { delta: numbe
 const card = "rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm";
 const field = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-navy-700";
 
-/** Tour steps for every dashboard; a page can add its own in front (e.g. the PSG shop picker). */
-export const DASHBOARD_TOUR = [
-  { target: "filters", title: "Filters", text: "Choose the date basis, dates, source and survey version. Apply keeps the rest of the page in step." },
-  { target: "range", title: "Quick date ranges", text: "Jump to the last 30 days, 90 days or 12 months." },
-  { target: "export", title: "Export CSV", text: "Download the responses in this view, with the same filters, as a spreadsheet file." },
-  { target: "counts", title: "Response counts", text: "Submitted surveys, those counted in scores, those waiting for a customer match, those with negative feedback and partial surveys." },
-  { target: "volume", title: "Responses over time", text: "Submitted against counted in scores. Hover the chart to see each period." },
-  { target: "mix", title: "Sources and what counts", text: "Where responses came from, and why some are not in the scores yet." },
-  { target: "scores", title: "Survey performance", text: "Average score for each measure, with the change against the first half of the period." },
-  { target: "versions", title: "Other survey versions", text: "Each survey version is scored on its own. Open one to see its scores." },
-  { target: "list", title: "Responses", text: "Every response in this view. Use the tabs to show only counted, pending or negative ones, and View to open one." },
-  { target: "history", title: "Earlier survey history", text: "Results from the earlier survey system, shown on their own scales and never mixed into the scores." },
-];
-
 /**
  * The survey dashboard (SR-27, SR-30, SR-31), shared by the shop workspace
  * and PSG. It states its date basis, filters and every excluded cohort, so a

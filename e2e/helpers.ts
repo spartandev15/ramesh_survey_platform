@@ -1,4 +1,5 @@
 import { expect, type Browser, type Locator, type Page } from "@playwright/test";
+import { TOURS } from "../src/components/tours";
 
 export const TEST_SHOP = { name: "E2E Collision (internal test)", slug: "e2e-collision-test" };
 
@@ -22,7 +23,7 @@ export async function signIn(page: Page) {
 /** Sign in any account and wait for its landing page, waiting out the sign-in rate limit (per address, shared by every test). */
 export async function signInAs(page: Page, email: string, password: string, landing: RegExp) {
   // Tests act as returning users: the first-visit tour offer (e2e/tour.spec.ts) stays out of the way.
-  await page.addInitScript(() => ["overview", "psg-dashboard", "shop-dashboard"].forEach((id) => localStorage.setItem(`psg-tour:${id}`, "seen")));
+  await page.addInitScript((ids) => ids.forEach((id) => localStorage.setItem(`psg-tour:${id}`, "seen")), TOURS.map((t) => t.id));
   for (let attempt = 1; ; attempt++) {
     await page.goto("/login");
     await page.getByLabel("Email address").fill(email);

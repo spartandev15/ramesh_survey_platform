@@ -11,6 +11,7 @@ import { listInstruments } from "@/modules/instruments/instruments";
 import { filterSurveys, latestPublished, parseSurveyFilters, SURVEY_SORTS, SURVEY_STATUSES, SURVEY_TYPES, surveyStatus, type SurveyStatus } from "@/modules/instruments/list-filter";
 import { InstrumentForm } from "./instrument-form";
 import { ActionsHeader, RowActions } from "@/components/row-actions";
+import { Field, Kpi } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Surveys" };
 
@@ -74,7 +75,7 @@ export default async function InstrumentsPage({ searchParams }: PageProps<"/psg/
       </div>
 
       {/* Headline numbers */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="tiles" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi tone="blue" icon={ClipboardList} label="Total surveys" value={all.length} note={`${lately(all.map((i) => i.createdAt))} created in the last 30 days`}>
           <Sparkline id="surveys-total" values={created} color="#4f7cf7" label="Surveys, month by month" className="h-10 w-24" />
         </Kpi>
@@ -290,43 +291,6 @@ export default async function InstrumentsPage({ searchParams }: PageProps<"/psg/
           </section>
         )}
       </div>
-    </div>
-  );
-}
-
-const KPI_TONES = {
-  blue: { card: "bg-linear-to-br from-blue-50 to-white border-blue-100", icon: "bg-blue-100 text-blue-600" },
-  green: { card: "bg-linear-to-br from-emerald-50 to-white border-emerald-100", icon: "bg-emerald-100 text-emerald-600" },
-  amber: { card: "bg-linear-to-br from-amber-50 to-white border-amber-100", icon: "bg-amber-100 text-amber-600" },
-  rose: { card: "bg-linear-to-br from-rose-50 to-white border-rose-100", icon: "bg-rose-100 text-rose-600" },
-};
-
-function Kpi({ tone, icon: Icon, label, value, note, children }: { tone: keyof typeof KPI_TONES; icon: typeof ClipboardList; label: string; value: number; note: string; children?: React.ReactNode }) {
-  const t = KPI_TONES[tone];
-  return (
-    <div className={`flex items-start gap-3 rounded-2xl border p-5 shadow-sm ${t.card}`}>
-      <span className={`rounded-xl p-2.5 ${t.icon}`} aria-hidden="true">
-        <Icon className="size-5" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-gray-600">{label}</p>
-        <div className="flex items-end justify-between gap-2">
-          <p className="text-2xl font-semibold tabular-nums text-brand-navy-900">{value}</p>
-          {children}
-        </div>
-        <p className="mt-1 text-xs text-gray-500">{note}</p>
-      </div>
-    </div>
-  );
-}
-
-function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-[11px] font-medium text-gray-500">
-        {label}
-      </label>
-      {children}
     </div>
   );
 }

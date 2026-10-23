@@ -15,6 +15,7 @@ import { MODE_LABELS } from "@/modules/shops/fields";
 import { SHOP_SORTS, SHOP_TYPES, filterShops, parseShopFilters, shopFilterQuery, type ShopListFilters } from "@/modules/shops/list-filter";
 import { CreateShopForm } from "./create-shop-form";
 import { ActionsHeader, RowActions } from "@/components/row-actions";
+import { Kpi } from "@/components/ui";
 import { env } from "@/lib/env";
 import { DeleteShopButton } from "./delete-shop";
 import { ModeBadge } from "./mode-badge";
@@ -105,7 +106,7 @@ export default async function ShopsPage({ searchParams }: PageProps<"/psg/shops"
       </div>
 
       {/* Headline numbers */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="tiles" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi tone="green" icon={Store} label="Total shops" value={all.length} note={`${addedLately} added in the last 30 days`}>
           <Sparkline id="shops-total" values={shopsByMonth} color="#10b981" label="Shops, month by month" className="h-10 w-24" />
         </Kpi>
@@ -242,32 +243,6 @@ export default async function ShopsPage({ searchParams }: PageProps<"/psg/shops"
             <Pagination {...list} path="/psg/shops" query={listQuery} label="Shop pages" />
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-const KPI_TONES = {
-  green: { card: "bg-linear-to-br from-emerald-50 to-white border-emerald-100", icon: "bg-emerald-100 text-emerald-600" },
-  blue: { card: "bg-linear-to-br from-blue-50 to-white border-blue-100", icon: "bg-blue-100 text-blue-600" },
-  orange: { card: "bg-linear-to-br from-orange-50 to-white border-orange-100", icon: "bg-orange-100 text-orange-600" },
-  purple: { card: "bg-linear-to-br from-violet-50 to-white border-violet-100", icon: "bg-violet-100 text-violet-600" },
-};
-
-function Kpi({ tone, icon: Icon, label, value, note, children }: { tone: keyof typeof KPI_TONES; icon: typeof Store; label: string; value: number; note: string; children?: React.ReactNode }) {
-  const t = KPI_TONES[tone];
-  return (
-    <div className={`flex items-start gap-3 rounded-2xl border p-5 shadow-sm ${t.card}`}>
-      <span className={`rounded-xl p-2.5 ${t.icon}`} aria-hidden="true">
-        <Icon className="size-5" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-gray-600">{label}</p>
-        <div className="flex items-end justify-between gap-2">
-          <p className="text-2xl font-semibold tabular-nums text-brand-navy-900">{value.toLocaleString("en-US")}</p>
-          {children}
-        </div>
-        <p className="mt-1 text-xs text-gray-500">{note}</p>
       </div>
     </div>
   );

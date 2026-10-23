@@ -12,6 +12,7 @@ import { parseResponseQuery, PERIOD_OPTIONS, STATE_OPTIONS } from "@/modules/res
 import { listResponses, matchQueueCounts, monthlyQueueCounts } from "@/modules/responses/staff";
 import type { MatchStatus, RespondentContext } from "@/modules/responses/staff-store";
 import { ActionsHeader, ICON_BUTTON, RowActions } from "@/components/row-actions";
+import { Field } from "@/components/ui";
 import { ExportSelected, SelectAll } from "./selection";
 
 export const metadata: Metadata = { title: "Responses" };
@@ -360,14 +361,3 @@ const KPI_TONES = {
   red: { card: "bg-linear-to-br from-rose-50 to-white border-rose-100", icon: "bg-rose-100 text-rose-600", bar: "#f43f5e" },
   purple: { card: "bg-linear-to-br from-violet-50 to-white border-violet-100", icon: "bg-violet-100 text-violet-600", bar: "#8b5cf6" },
 };
-
-function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-[11px] font-medium text-gray-500">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}

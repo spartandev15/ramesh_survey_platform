@@ -4,7 +4,7 @@
  * out once per day however many workers run; the counts are production only.
  * Everything rolls back.
  */
-import { and, count, eq, lte } from "drizzle-orm";
+import { and, count, eq, inArray, lte } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 
 try {
@@ -15,7 +15,7 @@ try {
 
 describe.skipIf(!process.env.DATABASE_URL)("operations notices", async () => {
   const { getDb, getPool } = await import("@/db/client");
-  const { emailIntent, opsNotice } = await import("@/db/schema");
+  const { emailIntent, opsNotice, rateLimit, verification } = await import("@/db/schema");
   const { notifyProblems, sendDailyReport } = await import("./monitoring");
   const store = await import("./store");
   type Tx = import("@/db/client").Tx;
@@ -105,5 +105,24 @@ describe.skipIf(!process.env.DATABASE_URL)("operations notices", async () => {
       const daily = await store.dailyCounts(tx, T0);
       expect(daily.emailsQueuedDue).toBe(direct.n);
       expect(Object.values(daily.responsesSubmitted).every((n) => Number.isInteger(n) && n >= 0)).toBe(true);
+    }));
+
+  it("removes expired links and idle rate-limit counters, and keeps live ones", () =>
+    inRollback(async (tx) => {
+      const hour = 60 * 60_000;
+      await tx.insert(rateLimit).values([
+        { id: "t-old", key: "t-old", count: 1, lastRequest: T0.getTime() - 25 * hour },
+        { id: "t-new", key: "t-new", count: 1, lastRequest: T0.getTime() - hour },
+      ]);
+      await tx.insert(verification).values([
+        { id: "t-old", identifier: "t-old", value: "x", expiresAt: later(-1) },
+        { id: "t-new", identifier: "t-new", value: "x", expiresAt: later(60) },
+      ]);
+      const removed = await store.removeExpired(tx, T0);
+      expect(removed.limits).toBeGreaterThanOrEqual(1);
+      expect(removed.links).toBeGreaterThanOrEqual(1);
+      const left = async (table: typeof rateLimit | typeof verification) => (await tx.select({ id: table.id }).from(table).where(inArray(table.id, ["t-old", "t-new"]))).map((r) => r.id);
+      expect(await left(rateLimit)).toEqual(["t-new"]);
+      expect(await left(verification)).toEqual(["t-new"]);
     }));
 });

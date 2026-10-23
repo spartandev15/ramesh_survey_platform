@@ -48,7 +48,7 @@ export default async function BridgePage({ searchParams }: PageProps<"/psg/bridg
       </div>
 
       {/* Status at a glance */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div data-tour="tiles" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <div className="col-span-2 flex items-center gap-3 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm md:col-span-1">
           <span className={`size-3 shrink-0 rounded-full ${on ? "bg-emerald-500" : "bg-gray-400"}`} aria-hidden="true" />
           <div>

@@ -1,4 +1,4 @@
-import { AlertCircle, Clock, Copy, FilePlus2, FileX2, type LucideIcon } from "lucide-react";
+import { AlertCircle, Clock, Copy, FilePlus2, FileX2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LiveForm } from "@/components/live-form";
@@ -11,6 +11,7 @@ import { SOURCE_SYSTEMS, type BatchCounts } from "@/modules/imports/store";
 import { listVisibleShops } from "@/modules/shops/shops";
 import { UploadForm } from "./upload-form";
 import { ActionsHeader, RowActions } from "@/components/row-actions";
+import { Tile } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Imports" };
 
@@ -37,7 +38,7 @@ export default async function ImportsPage({ searchParams }: PageProps<"/psg/impo
         </div>
 
         <p className="-mb-2 text-xs text-gray-500">Totals for production uploads; test uploads are listed below but not counted here.</p>
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div data-tour="tiles" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Tile icon={FilePlus2} tone="bg-emerald-50 text-emerald-600" value={totals.created} label="Created" note="New customer records" />
           <Tile icon={Copy} tone="bg-blue-50 text-blue-600" value={totals.reused} label="Duplicate" note="Already on file" />
           <Tile icon={Clock} tone="bg-amber-50 text-amber-600" value={totals.held} label="Held" note="Waiting for details" />
@@ -169,21 +170,6 @@ export default async function ImportsPage({ searchParams }: PageProps<"/psg/impo
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function Tile({ icon: Icon, tone, value, label, note }: { icon: LucideIcon; tone: string; value: number; label: string; note: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm">
-      <span className={`rounded-full p-3 ${tone}`} aria-hidden="true">
-        <Icon className="size-5" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-2xl font-semibold tabular-nums text-brand-navy-900">{value.toLocaleString("en-US")}</p>
-        <p className="text-sm font-medium text-gray-800">{label}</p>
-        <p className="truncate text-xs text-gray-500">{note}</p>
-      </div>
     </div>
   );
 }

@@ -1,26 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { isAccessError } from "@/modules/access/errors";
+import { act } from "@/lib/action";
 import * as cases from "@/modules/cases/cases";
 import { CaseError, type ResolutionOutcome, type SuppressionResult } from "@/modules/cases/store";
 
-export type CaseActionResult = { ok: true } | { ok: false; message: string };
-
-function failure(error: unknown): CaseActionResult {
-  if (error instanceof CaseError) return { ok: false, message: error.message };
-  if (isAccessError(error)) return { ok: false, message: "You do not have permission to do this." };
-  throw error;
-}
-
-async function run(fn: () => Promise<unknown>, paths: string[]): Promise<CaseActionResult> {
-  try {
-    await fn();
-    for (const p of paths) revalidatePath(p);
-    return { ok: true };
-  } catch (error) {
-    return failure(error);
-  }
+function run(fn: () => Promise<unknown>, paths: string[]) {
+  return act(fn, CaseError, paths);
 }
 
 export async function approveAction(caseId: string, revision: number, recipients: string[], note: string) {

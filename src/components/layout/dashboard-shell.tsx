@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { PageTour } from "@/components/tour";
 import { NAV_ICONS, SIDEBAR_COOKIE, type NavItem } from "./nav";
 import { SignOutButton } from "./sign-out-button";
 import { useDismiss } from "./use-dismiss";
@@ -203,6 +204,7 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
           </form>
 
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <PageTour />
             <div ref={notificationsRef} className="relative">
               <button
                 type="button"

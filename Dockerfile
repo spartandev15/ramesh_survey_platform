@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # One image, two roles:
 #   web:    docker run IMAGE                  (Next.js standalone server)
-#   worker: docker run IMAGE npm run worker   (background jobs)
+#   worker: docker run IMAGE node --conditions=react-server --import tsx src/worker/index.ts   (background jobs)
 #   migrate: docker run IMAGE npm run db:migrate
 
 FROM node:24-alpine AS deps

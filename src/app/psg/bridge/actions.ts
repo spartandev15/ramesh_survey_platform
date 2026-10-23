@@ -1,23 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { isAccessError } from "@/modules/access/errors";
+import { act } from "@/lib/action";
 import { addBridgeDependency, confirmBridgeGate, keepHubVersion, retryBridgeEvent, setBridgeDependencyStatus, signBridgeRetirement, withdrawBridgeGate } from "@/modules/bridge/bridge";
 import { BridgeError } from "@/modules/bridge/store";
 
-export type BridgeActionResult = { ok: true } | { ok: false; message: string };
-
-async function run(body: () => Promise<unknown>): Promise<BridgeActionResult> {
-  try {
-    await body();
-    // Refreshes this page in the same response.
-    revalidatePath("/psg/bridge");
-    return { ok: true };
-  } catch (error) {
-    if (error instanceof BridgeError) return { ok: false, message: error.message };
-    if (isAccessError(error)) return { ok: false, message: "You do not have permission to do this." };
-    throw error;
-  }
+// Refreshes this page in the same response.
+function run(body: () => Promise<unknown>) {
+  return act(body, BridgeError, ["/psg/bridge"]);
 }
 
 export async function confirmGateAction(item: string, note: string) {

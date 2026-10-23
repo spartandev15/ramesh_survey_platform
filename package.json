@@ -18,7 +18,7 @@
     "db:studio": "drizzle-kit studio",
     "db:prune": "tsx --conditions=react-server --env-file-if-exists=.env scripts/dev-prune.ts",
     "create-admin": "tsx --conditions=react-server --env-file-if-exists=.env scripts/create-admin.ts",
-    "worker": "tsx --conditions=react-server --env-file-if-exists=.env src/worker/index.ts",
+    "worker": "node --conditions=react-server --env-file-if-exists=.env --import tsx src/worker/index.ts",
     "seed:demo": "tsx --conditions=react-server --env-file-if-exists=.env scripts/seed-demo-instrument.ts",
     "load-test": "tsx --conditions=react-server --env-file-if-exists=.env scripts/load-test.ts",
     "restore-drill": "tsx --conditions=react-server --env-file-if-exists=.env scripts/restore-drill.ts",

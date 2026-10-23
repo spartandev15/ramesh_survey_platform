@@ -23,6 +23,7 @@ import {
   type QueueKind,
 } from "@/modules/operations/policy";
 import { LiveForm } from "@/components/live-form";
+import { Field } from "@/components/ui";
 import { OwnerControl, ReviewForm } from "./controls";
 
 export const metadata: Metadata = { title: "Operator queues" };
@@ -524,16 +525,6 @@ function Tab({ href, active, label, count }: { href: string; active: boolean; la
 }
 
 /** A label above its control, tied by id so the name is just the label (not the chosen option too). */
-function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-[11px] font-medium text-gray-500">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
 
 /** The other filters as hidden fields, so a submit without JavaScript keeps them. */
 function Keep({ params, except }: { params: Record<string, string | string[] | undefined>; except: string[] }) {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Donut } from "@/components/dashboard/charts";
 import { LiveForm } from "@/components/live-form";
 import { Pagination } from "@/components/pagination";
+import { Field } from "@/components/ui";
 import { pageNumber } from "@/lib/pagination";
 import { pageRequireCapability } from "@/modules/access/page-guards";
 import { alertReasonCounts, caseCounts, listCases } from "@/modules/cases/cases";
@@ -284,16 +285,5 @@ function Panel({ icon: Icon, title, subtitle, children }: { icon?: LucideIcon; t
       </div>
       {children}
     </section>
-  );
-}
-
-function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-[11px] font-medium text-gray-500">
-        {label}
-      </label>
-      {children}
-    </div>
   );
 }

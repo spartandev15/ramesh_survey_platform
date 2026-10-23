@@ -75,6 +75,11 @@ export async function runDailyReport(notify: Notify, now = new Date()) {
   return getDb().transaction((tx) => sendDailyReport(tx, notify, now));
 }
 
+/** Hourly clean-up of rows that have expired. */
+export function runCleanup(now = new Date()) {
+  return getDb().transaction((tx) => store.removeExpired(tx, now));
+}
+
 /** Claim the day, then send; false when this day's report already went out. */
 export async function sendDailyReport(tx: Tx, notify: Notify, now: Date) {
   if (!(await store.claimReport(tx, reportKey(now), now))) return false;

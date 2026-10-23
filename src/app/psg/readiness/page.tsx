@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Clock, Download, Info, MinusCircle, Rocket, Search, Settings, Store, type LucideIcon } from "lucide-react";
+import { Clock, Download, Info, MinusCircle, Rocket, Search, Settings, Store } from "lucide-react";
 import Link from "next/link";
 import { LiveForm } from "@/components/live-form";
 import { Pagination } from "@/components/pagination";
@@ -9,6 +9,7 @@ import { getManifest } from "@/modules/readiness/readiness";
 import { ModeBadge } from "../shops/mode-badge";
 import { Checklist } from "./checklist";
 import { ActionsHeader, RowActions } from "@/components/row-actions";
+import { Tile } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Launch readiness" };
 
@@ -53,7 +54,7 @@ export default async function ReadinessPage({ searchParams }: PageProps<"/psg/re
         shop{shops.length === 1 ? "" : "s"} ready to launch.
       </p>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="tiles" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Tile icon={Rocket} tone="bg-blue-50 text-blue-600" value={ready} label="Ready to launch" note={`of ${shops.length} shop${shops.length === 1 ? "" : "s"}`} />
         <Tile icon={Clock} tone="bg-amber-50 text-amber-600" value={shops.length - ready} label="Not ready" note="still missing items" />
         <Tile icon={MinusCircle} tone="bg-slate-100 text-slate-500" value={testShops.length} label="Not in scope" note="internal test shops" />
@@ -181,21 +182,6 @@ export default async function ReadinessPage({ searchParams }: PageProps<"/psg/re
           <span>Not in scope (internal test shops, which never go Live and never count in reports): {testShops.map((t) => t.name).join(", ")}.</span>
         </p>
       )}
-    </div>
-  );
-}
-
-function Tile({ icon: Icon, tone, value, label, note }: { icon: LucideIcon; tone: string; value: number; label: string; note: string }) {
-  return (
-    <div className="flex items-center gap-4 rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm">
-      <span className={`rounded-full p-3.5 ${tone}`} aria-hidden="true">
-        <Icon className="size-6" />
-      </span>
-      <div>
-        <p className="text-2xl font-semibold tabular-nums text-brand-navy-900">{value}</p>
-        <p className="text-sm font-medium text-gray-800">{label}</p>
-        <p className="text-xs text-gray-500">{note}</p>
-      </div>
     </div>
   );
 }
