@@ -4,8 +4,9 @@ import { Bell, ChevronDown, Menu, Search, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PageTour } from "@/components/tour";
+import type { Notice } from "@/modules/notifications/notifications";
 import { NAV_ICONS, SIDEBAR_COOKIE, type NavItem } from "./nav";
 import { SignOutButton } from "./sign-out-button";
 import { useDismiss } from "./use-dismiss";
@@ -60,17 +61,31 @@ interface DashboardShellProps {
   nav: NavItem[];
   userName: string;
   userEmail: string;
+  /** Where the top bar search goes (?q=). */
+  search: string;
+  /** The bell's list (src/app/api/notifications). */
+  notifications: string;
   initialCollapsed: boolean;
   year: number;
   children: React.ReactNode;
 }
 
-export function DashboardShell({ title, nav, userName, userEmail, initialCollapsed, year, children }: DashboardShellProps) {
+export function DashboardShell({ title, nav, userName, userEmail, search, notifications, initialCollapsed, year, children }: DashboardShellProps) {
   const pathname = usePathname();
   const isDesktop = useIsDesktop();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
+
+  const [notices, setNotices] = useState<Notice[] | null>(null);
+  const waiting = notices?.reduce((n, x) => n + x.count, 0) ?? 0;
+  const loadNotices = useCallback(() => {
+    fetch(notifications, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setNotices, () => setNotices([]));
+  }, [notifications]);
+  // Fresh on every page change, so the count follows the work just done.
+  useEffect(loadNotices, [loadNotices, pathname]);
 
   const notificationsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -189,15 +204,16 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
             {showClose ? <X aria-hidden="true" className="size-5" /> : <Menu aria-hidden="true" className="size-5" />}
           </button>
 
-          {/* Search results arrive with the customer and response modules; the field is in place for them. */}
-          <form role="search" onSubmit={(event) => event.preventDefault()} className="relative min-w-0 max-w-md flex-1">
+          <form role="search" action={search} className="relative min-w-0 max-w-md flex-1">
             <label htmlFor="global-search" className="sr-only">
               Search
             </label>
             <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
             <input
               id="global-search"
+              name="q"
               type="search"
+              maxLength={100}
               placeholder="Search..."
               className="h-10 w-full rounded-lg border border-gray-200 bg-surface pl-9 pr-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-brand-navy-700 focus:bg-white"
             />
@@ -208,18 +224,39 @@ export function DashboardShell({ title, nav, userName, userEmail, initialCollaps
             <div ref={notificationsRef} className="relative">
               <button
                 type="button"
-                onClick={() => setOpenMenu((menu) => (menu === "notifications" ? null : "notifications"))}
+                onClick={() => {
+                  if (openMenu !== "notifications") loadNotices();
+                  setOpenMenu((menu) => (menu === "notifications" ? null : "notifications"));
+                }}
                 aria-haspopup="true"
                 aria-expanded={openMenu === "notifications"}
-                aria-label="Notifications"
-                className="flex size-10 items-center justify-center rounded-lg text-gray-600 transition hover:bg-gray-100 hover:text-brand-navy-900"
+                aria-label={waiting > 0 ? `Notifications, ${waiting} waiting` : "Notifications"}
+                className="relative flex size-10 items-center justify-center rounded-lg text-gray-600 transition hover:bg-gray-100 hover:text-brand-navy-900"
               >
                 <Bell aria-hidden="true" className="size-5" />
+                {waiting > 0 && (
+                  <span aria-hidden="true" className="absolute right-1 top-1 min-w-4 rounded-full bg-brand-red px-1 text-center text-[10px] font-semibold leading-4 text-white">
+                    {waiting > 99 ? "99+" : waiting}
+                  </span>
+                )}
               </button>
               {openMenu === "notifications" && (
                 <div className="absolute right-0 top-12 w-72 rounded-xl border border-gray-200 bg-white shadow-lg">
                   <p className="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-brand-navy-900">Notifications</p>
-                  <p className="px-4 py-6 text-center text-sm text-gray-500">You have no new notifications.</p>
+                  {notices && notices.length > 0 ? (
+                    <ul className="py-1">
+                      {notices.map((n) => (
+                        <li key={n.href}>
+                          <Link href={n.href} onClick={closeMenu} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                            {n.label}
+                            <span className="rounded-full bg-brand-red/10 px-2 text-xs font-semibold tabular-nums text-brand-red-dark">{n.count}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="px-4 py-6 text-center text-sm text-gray-500">{notices ? "Nothing is waiting for you." : "Checking…"}</p>
+                  )}
                 </div>
               )}
             </div>

@@ -9,11 +9,13 @@ interface WorkspaceShellProps {
   nav: NavItem[];
   userName: string;
   userEmail: string;
+  search: string;
+  notifications: string;
   children: React.ReactNode;
 }
 
 /** Sidebar, top bar and footer shared by the PSG and shop workspaces. */
-export async function WorkspaceShell({ title, nav, userName, userEmail, children }: WorkspaceShellProps) {
+export async function WorkspaceShell({ title, nav, userName, userEmail, search, notifications, children }: WorkspaceShellProps) {
   const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   return (
     <DashboardShell
@@ -21,6 +23,8 @@ export async function WorkspaceShell({ title, nav, userName, userEmail, children
       nav={nav}
       userName={userName}
       userEmail={userEmail}
+      search={search}
+      notifications={notifications}
       initialCollapsed={collapsed}
       year={new Date().getFullYear()}
     >

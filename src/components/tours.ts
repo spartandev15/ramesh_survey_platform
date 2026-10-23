@@ -1,5 +1,11 @@
 import type { TourStep } from "./tour";
 
+// The top bar is on every page; the two landing pages introduce it.
+const TOP_BAR_STEPS: TourStep[] = [
+  { target: "form[role=\"search\"]", title: "Search", text: "Type a shop, survey, page or customer and press Enter to find it." },
+  { target: "button[aria-label^=\"Notifications\"]", title: "Notifications", text: "The red number counts work waiting for you. Click the bell to see it and go straight there." },
+];
+
 const DASHBOARD_STEPS: TourStep[] = [
   { target: "[data-tour=\"filters\"]", title: "Filters", text: "Choose the date basis, dates, source and survey version. Apply keeps the rest of the page in step." },
   { target: "[data-tour=\"range\"]", title: "Quick date ranges", text: "Jump to the last 30 days, 90 days or 12 months." },
@@ -17,9 +23,28 @@ const DASHBOARD_STEPS: TourStep[] = [
 export const TOURS: { id: string; path: RegExp; steps: TourStep[] }[] = [
   // PSG workspace
   {
+    id: "search",
+    path: /^\/psg\/search$/,
+    steps: [
+      { target: "[aria-labelledby=\"search-Pages\"]", title: "Pages", text: "Workspace pages whose name matches. Click one to open it." },
+      { target: "[aria-labelledby=\"search-Shops\"]", title: "Shops", text: "Shops whose name or public link matches." },
+      { target: "[aria-labelledby=\"search-Surveys\"]", title: "Surveys", text: "Surveys whose name or key matches." },
+      { target: "[aria-labelledby=\"search-lists\"]", title: "Search the lists", text: "Customers, emails, visits and cases are in these lists. Each button opens one already filtered by your words." },
+    ],
+  },
+  {
+    id: "shop-search",
+    path: /^\/shop\/[^/]+\/search$/,
+    steps: [
+      { target: "main h1", title: "Search", text: "Results for the words you typed in the search box at the top." },
+      { target: "main ul[aria-label=\"Search results\"]", title: "Results", text: "Your pages and follow-up cases that match. Click one to open it." },
+    ],
+  },
+  {
     id: "overview",
     path: /^\/psg$/,
     steps: [
+      ...TOP_BAR_STEPS,
       { target: "[data-tour=\"test-data\"]", title: "Production or test data", text: "Numbers show production data only. Switch here to include internal test and demo shops." },
       { target: "[data-tour=\"kpis\"]", title: "Headline numbers", text: "Responses over the last 12 months, this month against last month, the share matched to a visit and negative feedback." },
       { target: "[data-tour=\"work\"]", title: "Work waiting", text: "Active shops, operator items and alerts that need review. Click a tile to open that queue." },
@@ -314,6 +339,6 @@ export const TOURS: { id: string; path: RegExp; steps: TourStep[] }[] = [
   {
     id: "shop-dashboard",
     path: /^\/shop\/[^/]+$/,
-    steps: DASHBOARD_STEPS,
+    steps: [...TOP_BAR_STEPS, ...DASHBOARD_STEPS],
   },
 ];

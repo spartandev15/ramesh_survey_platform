@@ -106,6 +106,11 @@ export async function listShopCases(shopId: string, page: number) {
   return getDb().transaction((tx) => loadPage(page, () => store.countShopCases(tx, shopId), (offset, size) => store.listShopCases(tx, shopId, offset, size)));
 }
 
+export async function searchShopCases(shopId: string, words: string) {
+  await requireShopRead(shopId);
+  return getDb().transaction((tx) => store.searchShopCases(tx, shopId, words));
+}
+
 export async function getShopCase(shopId: string, caseId: string) {
   await requireShopRead(shopId);
   if (!UUID_RE.test(caseId)) return null;

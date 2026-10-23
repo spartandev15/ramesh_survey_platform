@@ -17,6 +17,8 @@ export default async function ShopLayout({ children, params }: LayoutProps<"/sho
         { href: `/shop/${shopId}`, label: "Survey dashboard", icon: "dashboard" },
         { href: `/shop/${shopId}/cases`, label: "Follow-up", icon: "cases" },
       ]}
+      search={`/shop/${shopId}/search`}
+      notifications={`/api/notifications?shop=${shopId}`}
       userName={current.name}
       userEmail={current.email}
     >

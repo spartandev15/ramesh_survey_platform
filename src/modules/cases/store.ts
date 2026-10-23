@@ -364,6 +364,22 @@ export async function countShopCases(tx: Tx, shopId: string) {
   return row.n;
 }
 
+/** The shop's cases whose alert reasons contain the words (top bar search), newest first. */
+export async function searchShopCases(tx: Tx, shopId: string, words: string, limit = 20) {
+  return tx
+    .select({ id: alertCase.id, alerts: alertCase.alerts, followUp: alertCase.followUp, createdAt: alertCase.createdAt })
+    .from(alertCase)
+    .where(and(shopCaseWhere(shopId), sql`position(lower(${words}) in lower(${alertCase.alerts}::text)) > 0`))
+    .orderBy(desc(alertCase.createdAt))
+    .limit(limit);
+}
+
+/** Approved cases the shop is still following up. */
+export async function countOpenShopCases(tx: Tx, shopId: string) {
+  const [row] = await tx.select({ n: count() }).from(alertCase).where(and(shopCaseWhere(shopId), eq(alertCase.followUp, "open")));
+  return row.n;
+}
+
 export async function listShopCases(tx: Tx, shopId: string, offset: number, size: number) {
   return tx
     .select({ case: alertCase, submittedAt: surveyResponse.submittedAt })
