@@ -7,8 +7,8 @@ How to run PSG Hub Surveys in production and what PSG operations does each day. 
 | Process | Command | What it does |
 | --- | --- | --- |
 | Web app | `npm run build` then `npm run start` | Staff pages, shop dashboards, customer surveys, APIs |
-| Worker | `npm run worker` locally; `node --conditions=react-server --import tsx src/worker/index.ts` in production (no npm process kept in memory) | Sends survey and alert emails, schedules reminders, runs the FileMaker bridge when it is switched on, sends operations notices |
-| Migrations | `npm run db:migrate` | Applies the SQL in `drizzle/` in order; run before starting a new release |
+| Worker | `npm run worker` locally; `node dist/worker.mjs` in production (one bundled file from `npm run build:server`; about 70 MB of memory) | Sends survey and alert emails, schedules reminders, runs the FileMaker bridge when it is switched on, sends operations notices |
+| Migrations | `npm run db:migrate` locally; `node dist/migrate.mjs` in the image | Applies the SQL in `drizzle/` in order; run before starting a new release |
 
 Run exactly one or more workers next to the web app. Several workers are safe: every send is claimed with a lease, and notices and the daily report are sent once. **Restart the worker after every deploy**: it does not reload code.
 
@@ -108,6 +108,8 @@ For open follow-up cases from the old system (SR-46; owner until handoff: G-12).
 ## 7. Backup and restore
 
 - Take automated PostgreSQL backups with point-in-time recovery (proposed RPO 15 minutes, RTO 4 hours; PSG to confirm).
+- On a single server without a managed database, `deploy/backup.sh` takes a daily `pg_dump` from cron and keeps 14 days; copy the folder off the server as well.
+- Put `deploy/nginx.conf` in front of the app: HTTPS, and it overwrites `X-Forwarded-For` so rate limits see the real client address.
 - Prove a restore regularly: an administrator creates an empty database once (`createdb -U postgres -O psg psg_survey_drill`), then run `DRILL_DATABASE_URL=... npm run restore-drill`. It backs up the live database, restores the copy into the drill database, checks that key table counts match and that the data guards (append-only history, locked answers) came back, and prints the backup and restore times. It never writes to the live database.
 - After a restore, start the worker last and review **Email review** before it sends anything.
 

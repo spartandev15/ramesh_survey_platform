@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:server": "esbuild worker=src/worker/index.ts migrate=scripts/migrate.ts create-admin=scripts/create-admin.ts --bundle --platform=node --target=node24 --format=esm --conditions=react-server --outdir=dist --out-extension:.js=.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --log-level=warning",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -52,6 +53,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
