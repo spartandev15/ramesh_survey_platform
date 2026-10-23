@@ -1,6 +1,7 @@
 import { Activity, AlertTriangle, ArrowLeftRight, BarChart3, Calendar, CheckCircle2, ChevronRight, CircleX, ListChecks, Mail, MessageSquareWarning, Store, Target, TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { Donut, Legend, MiniBars, Sparkline, SplitBar, TrendChart } from "@/components/dashboard/charts";
+import { Tour } from "@/components/tour";
 import { pageRequireCapability } from "@/modules/access/page-guards";
 import { operatorQueueSummary } from "@/modules/operations/operations";
 import { projectOverview } from "@/modules/operations/overview";
@@ -41,6 +42,19 @@ const C = {
   other: "var(--color-chart-other)",
 };
 
+const TOUR = [
+  { target: "test-data", title: "Production or test data", text: "Numbers show production data only. Switch here to include internal test and demo shops." },
+  { target: "kpis", title: "Headline numbers", text: "Responses over the last 12 months, this month against last month, the share matched to a visit and negative feedback." },
+  { target: "work", title: "Work waiting", text: "Active shops, operator items and alerts that need review. Click a tile to open that queue." },
+  { target: "trend", title: "Responses trend", text: "Submitted, matched and negative responses month by month. Hover a point to see its numbers." },
+  { target: "sources", title: "Where responses came from", text: "How many came from the emailed link, paper forms and the public form." },
+  { target: "months", title: "Month by month", text: "The latest month for responses, negative feedback, survey emails and match rate, with the last 12 months as bars." },
+  { target: "pipelines", title: "Matching, alerts and email", text: "Where each piece of work stands. Use the links to match responses, review alerts or check email." },
+  { target: "top-shops", title: "Busiest shops", text: "Shops with the most responses in the last 90 days. The arrow opens that shop’s dashboard." },
+  { target: "recent-alerts", title: "Recent alerts", text: "The newest negative feedback. Click one to review it." },
+  { target: "health", title: "System health", text: "Survey email, the background worker and the FileMaker bridge. Red means someone should take a look." },
+];
+
 const ALERT_STATUS: Record<string, { title: string; icon: LucideIcon; tone: string }> = {
   pending_review: { title: "Negative feedback received", icon: AlertTriangle, tone: "bg-rose-50 text-rose-600" },
   approved: { title: "Alert approved and sent", icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-600" },
@@ -77,7 +91,9 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
           <p className="mt-1 text-sm text-gray-500">Here&apos;s what&apos;s happening across all shops.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Tour id="overview" steps={TOUR} />
           <Link
+            data-tour="test-data"
             href={includeTest ? "/psg" : "/psg?test=1"}
             className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-sm transition hover:border-indigo-300 hover:text-indigo-700"
           >
@@ -91,7 +107,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
       </div>
 
       {/* Headline numbers */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="kpis" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi tone="blue" icon={Store} label="Total responses" value={fmt(totals.responses)} note="Last 12 months">
           <Sparkline id="kpi-total" values={cumulative} color="#4f7cf7" label="Responses so far, month by month" className="h-10 w-20 sm:w-24" />
         </Kpi>
@@ -114,7 +130,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
       </div>
 
       {/* Work waiting */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div data-tour="work" className="grid gap-4 sm:grid-cols-3">
         <WorkTile href="/psg/shops" icon={Store} iconTone="bg-indigo-50 text-indigo-600" label="Active shops" value={shops}>
           {project.shops.live} live · {project.shops.test} in test · {project.shops.paused} paused
         </WorkTile>
@@ -138,7 +154,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
 
       {/* Trend and sources */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <Card title="Responses trend" className="lg:col-span-3" aside={<Chip>Last 12 months</Chip>}>
+        <Card tour="trend" title="Responses trend" className="lg:col-span-3" aside={<Chip>Last 12 months</Chip>}>
           <Legend
             items={[
               { label: "Submitted", color: C.total },
@@ -162,7 +178,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
             />
           )}
         </Card>
-        <Card title="Where responses came from" className="lg:col-span-2">
+        <Card tour="sources" title="Where responses came from" className="lg:col-span-2">
           <div className="flex flex-1 flex-col items-center justify-center gap-6 py-2 sm:flex-row lg:flex-col xl:flex-row">
             <Donut
               total={submitted}
@@ -197,7 +213,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
 
       {/* Month by month */}
       {totals.responses > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div data-tour="months" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard title="Responses" tone="bg-emerald-50 border-emerald-100" valueTone="text-emerald-700" value={fmt(latest?.submitted ?? 0)}>
             <MiniBars labels={monthLabels} values={months.map((m) => m.submitted)} color="#10b981" />
           </MetricCard>
@@ -214,7 +230,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
       )}
 
       {/* Pipelines */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div data-tour="pipelines" className="grid gap-4 md:grid-cols-3">
         <Card title="Matching">
           <SplitBar
             parts={[
@@ -270,7 +286,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
 
       {/* Busiest shops and recent alerts */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card title="Busiest shops (last 90 days)" className="lg:col-span-2">
+        <Card tour="top-shops" title="Busiest shops (last 90 days)" className="lg:col-span-2">
           {project.topShops.length === 0 ? (
             <p className="py-4 text-sm text-gray-500">No responses in the last 90 days.</p>
           ) : (
@@ -327,6 +343,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
           )}
         </Card>
         <Card
+          tour="recent-alerts"
           title="Recent alerts"
           aside={
             <Link href="/psg/alerts" className="text-xs font-medium text-indigo-600 hover:underline">
@@ -361,7 +378,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
       </div>
 
       {/* Health */}
-      <section className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm">
+      <section data-tour="health" className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-brand-navy-900">System health</h2>
           <Link href="/psg/operations" className="text-xs font-medium text-indigo-600 hover:underline">
@@ -468,9 +485,9 @@ function Chip({ children }: { children: React.ReactNode }) {
   return <span className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs text-gray-600">{children}</span>;
 }
 
-function Card({ title, className = "", aside, children }: { title: string; className?: string; aside?: React.ReactNode; children: React.ReactNode }) {
+function Card({ title, className = "", aside, tour, children }: { title: string; className?: string; aside?: React.ReactNode; tour?: string; children: React.ReactNode }) {
   return (
-    <section className={`flex min-w-0 flex-col gap-4 rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm ${className}`}>
+    <section data-tour={tour} className={`flex min-w-0 flex-col gap-4 rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm ${className}`}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-brand-navy-900">{title}</h2>
         {aside}

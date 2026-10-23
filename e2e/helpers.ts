@@ -21,6 +21,8 @@ export async function signIn(page: Page) {
 
 /** Sign in any account and wait for its landing page, waiting out the sign-in rate limit (per address, shared by every test). */
 export async function signInAs(page: Page, email: string, password: string, landing: RegExp) {
+  // Tests act as returning users: the first-visit tour offer (e2e/tour.spec.ts) stays out of the way.
+  await page.addInitScript(() => ["overview", "psg-dashboard", "shop-dashboard"].forEach((id) => localStorage.setItem(`psg-tour:${id}`, "seen")));
   for (let attempt = 1; ; attempt++) {
     await page.goto("/login");
     await page.getByLabel("Email address").fill(email);

@@ -4,16 +4,20 @@
 #   docker compose --profile app up -d       # full stack: db, migrate, web, worker
 #
 # With EMAIL_PROVIDER=log every email is written to the web/worker logs instead of being sent.
+#
+# Ports are bound to this machine only. In production put one reverse proxy in front of web that
+# overwrites X-Forwarded-For with the client address (nginx: proxy_set_header X-Forwarded-For $remote_addr;)
+# and set POSTGRES_PASSWORD in .env: rate limits trust that header.
 
 services:
   db:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: psg
-      POSTGRES_PASSWORD: psg
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-psg}
       POSTGRES_DB: psg_survey
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +32,7 @@ services:
     command: ["npm", "run", "db:migrate"]
     env_file: .env
     environment:
-      DATABASE_URL: postgres://psg:psg@db:5432/psg_survey
+      DATABASE_URL: postgres://psg:${POSTGRES_PASSWORD:-psg}@db:5432/psg_survey
     depends_on:
       db:
         condition: service_healthy
@@ -38,9 +42,9 @@ services:
     build: .
     env_file: .env
     environment:
-      DATABASE_URL: postgres://psg:psg@db:5432/psg_survey
+      DATABASE_URL: postgres://psg:${POSTGRES_PASSWORD:-psg}@db:5432/psg_survey
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -51,7 +55,7 @@ services:
     command: ["npm", "run", "worker"]
     env_file: .env
     environment:
-      DATABASE_URL: postgres://psg:psg@db:5432/psg_survey
+      DATABASE_URL: postgres://psg:${POSTGRES_PASSWORD:-psg}@db:5432/psg_survey
     depends_on:
       migrate:
         condition: service_completed_successfully

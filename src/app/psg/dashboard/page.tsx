@@ -1,8 +1,9 @@
 import { Clock, Store } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DashboardView, exportQuery } from "@/components/dashboard/dashboard-view";
+import { DASHBOARD_TOUR, DashboardView, exportQuery } from "@/components/dashboard/dashboard-view";
 import { LiveForm } from "@/components/live-form";
+import { Tour } from "@/components/tour";
 import { pageNumber } from "@/lib/pagination";
 import { pageRequireCapability } from "@/modules/access/page-guards";
 import { localDate, parseFilters } from "@/modules/dashboard/cohort";
@@ -25,7 +26,7 @@ export default async function PsgDashboardPage({ searchParams }: PageProps<"/psg
   const picker = (
     <LiveForm label="Choose a shop" className="flex items-end gap-2">
       {Object.entries(params).map(([k, v]) => (typeof v === "string" && k !== "shop" && k !== "page" ? <input key={k} type="hidden" name={k} value={v} /> : null))}
-      <div className="relative flex flex-col gap-1">
+      <div data-tour="shop" className="relative flex flex-col gap-1">
         <label htmlFor="dashboard-shop" className="text-[11px] font-medium text-gray-500">
           Shop
         </label>
@@ -67,10 +68,13 @@ export default async function PsgDashboardPage({ searchParams }: PageProps<"/psg
           <p className="mt-1 text-sm text-gray-600">Each shop&apos;s results exactly as that shop sees them: feedback, trends and what needs action.</p>
         </div>
         {shop && (
-          <p className="flex items-center gap-1.5 text-xs text-gray-500">
-            <Clock aria-hidden="true" className="size-3.5" />
-            Live data as of {asOf}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="flex items-center gap-1.5 text-xs text-gray-500">
+              <Clock aria-hidden="true" className="size-3.5" />
+              Live data as of {asOf}
+            </p>
+            <Tour id="psg-dashboard" steps={[{ target: "shop", title: "Choose a shop", text: "Pick any shop to see its dashboard exactly as that shop sees it. Your filters stay as they are." }, ...DASHBOARD_TOUR]} />
+          </div>
         )}
       </div>
       {!shop && <p className="text-sm text-gray-600">Create a shop first.</p>}

@@ -25,7 +25,7 @@ All settings are environment variables; `.env.example` lists them.
 | `SENDGRID_WEBHOOK_PUBLIC_KEY` | Signed delivery events; without it the webhook refuses every event |
 | `OPS_ALERT_EMAILS` | PSG operations addresses (comma separated) for stuck-queue notices and the daily counts |
 | `SURVEY_HELP_EMAIL` | Optional help address shown to customers whose expired link cannot be renewed; otherwise they are told to contact the shop |
-| `TRUSTED_PROXY_HOPS` | Proxies in front of the app that add to `X-Forwarded-For` (default 1). Wrong values let one address share or dodge rate limits |
+| `TRUSTED_PROXY_HOPS` | Proxies in front of the app that add to `X-Forwarded-For` (default 1). Run the app behind one reverse proxy that **overwrites** the header with the client address (nginx `proxy_set_header X-Forwarded-For $remote_addr;`) and never expose the app port directly: Next.js keeps a header the client sent, so without the proxy one client can dodge every per-address rate limit, sign-in included |
 | `OPT_OUT_SECRET` | Optional signing key for opt-out links. Set it before ever rotating `BETTER_AUTH_SECRET`; links signed with the older key keep working |
 | `LOG_LEVEL` | `info` in production |
 | `DEV_PRUNE_KEEP` | Development only: the worker keeps the newest N rows per growing table (every 15 minutes). **Never set it in production.** The prune also refuses any database with a Live or Paused shop or a real (non-test) response, and never runs with `NODE_ENV=production` or `EMAIL_PROVIDER=sendgrid` |

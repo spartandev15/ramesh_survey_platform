@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { DashboardView, exportQuery } from "@/components/dashboard/dashboard-view";
+import { DASHBOARD_TOUR, DashboardView, exportQuery } from "@/components/dashboard/dashboard-view";
+import { Tour } from "@/components/tour";
 import { pageNumber } from "@/lib/pagination";
 import { pageRequireShopRead } from "@/modules/access/page-guards";
 import { localDate, parseFilters } from "@/modules/dashboard/cohort";
@@ -25,6 +26,9 @@ export default async function ShopDashboardPage({ params, searchParams }: PagePr
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold text-brand-navy-900 sm:text-[28px]">Survey dashboard</h1>
         {shop.isTestShop && <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Test data</span>}
+        <span className="ml-auto">
+          <Tour id="shop-dashboard" steps={DASHBOARD_TOUR} />
+        </span>
       </div>
       <p className="mt-1 text-sm text-gray-600">{shop.name}: your customer feedback, trends and what needs action.</p>
       <div className="mt-5">

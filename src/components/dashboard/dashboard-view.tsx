@@ -49,6 +49,20 @@ function halfChange(points: { value: number; weight: number }[]): { delta: numbe
 const card = "rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm";
 const field = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-navy-700";
 
+/** Tour steps for every dashboard; a page can add its own in front (e.g. the PSG shop picker). */
+export const DASHBOARD_TOUR = [
+  { target: "filters", title: "Filters", text: "Choose the date basis, dates, source and survey version. Apply keeps the rest of the page in step." },
+  { target: "range", title: "Quick date ranges", text: "Jump to the last 30 days, 90 days or 12 months." },
+  { target: "export", title: "Export CSV", text: "Download the responses in this view, with the same filters, as a spreadsheet file." },
+  { target: "counts", title: "Response counts", text: "Submitted surveys, those counted in scores, those waiting for a customer match, those with negative feedback and partial surveys." },
+  { target: "volume", title: "Responses over time", text: "Submitted against counted in scores. Hover the chart to see each period." },
+  { target: "mix", title: "Sources and what counts", text: "Where responses came from, and why some are not in the scores yet." },
+  { target: "scores", title: "Survey performance", text: "Average score for each measure, with the change against the first half of the period." },
+  { target: "versions", title: "Other survey versions", text: "Each survey version is scored on its own. Open one to see its scores." },
+  { target: "list", title: "Responses", text: "Every response in this view. Use the tabs to show only counted, pending or negative ones, and View to open one." },
+  { target: "history", title: "Earlier survey history", text: "Results from the earlier survey system, shown on their own scales and never mixed into the scores." },
+];
+
 /**
  * The survey dashboard (SR-27, SR-30, SR-31), shared by the shop workspace
  * and PSG. It states its date basis, filters and every excluded cohort, so a
@@ -117,7 +131,7 @@ export function DashboardView({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-2">
           {leading}
-          <details className="group relative">
+          <details data-tour="filters" className="group relative">
             <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 text-sm font-medium text-gray-700 shadow-sm hover:border-gray-400 [&::-webkit-details-marker]:hidden">
               <SlidersHorizontal className="size-4" aria-hidden="true" />
               Filters
@@ -175,7 +189,7 @@ export function DashboardView({
           </details>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <nav aria-label="Date range" className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+          <nav data-tour="range" aria-label="Date range" className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
             {presets.map((p) => {
               const active = filters.from === p.from && filters.to === today;
               return (
@@ -190,7 +204,7 @@ export function DashboardView({
               );
             })}
           </nav>
-          <a href={exportHref} className="flex h-10 items-center gap-2 rounded-xl bg-brand-navy-900 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-navy-700">
+          <a data-tour="export" href={exportHref} className="flex h-10 items-center gap-2 rounded-xl bg-brand-navy-900 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-navy-700">
             <Download className="size-4" aria-hidden="true" />
             Export CSV
           </a>
@@ -202,7 +216,7 @@ export function DashboardView({
         {filters.basis === "delivered" && " Responses not yet matched to a visit have no delivery date, so they are not in this view."}
       </p>
 
-      <section aria-label="Response counts" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <section data-tour="counts" aria-label="Response counts" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Stat icon={FileText} tone="blue" label="Submitted" value={summary.total} note="Total surveys received" />
         <Stat icon={CheckCircle2} tone="green" label="Counted in scores" value={counts.counted} note="Surveys used for scoring" />
         <Stat icon={Clock} tone="amber" label="Pending customer match" value={counts.pending_match} note="Waiting to match to a visit" />
@@ -211,7 +225,7 @@ export function DashboardView({
       </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <section aria-labelledby="volume-heading" className={`${card} lg:col-span-2`}>
+        <section data-tour="volume" aria-labelledby="volume-heading" className={`${card} lg:col-span-2`}>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <h2 id="volume-heading" className="text-base font-semibold text-brand-navy-900">
@@ -243,7 +257,7 @@ export function DashboardView({
           <DataTable caption="Responses over time" head={["Period", "Submitted", "Counted"]} rows={summary.volume.filter((v) => v.counted + v.other > 0).map((v) => [bucketLabel(v.bucket), v.counted + v.other, v.counted])} />
         </section>
 
-        <section aria-labelledby="mix-heading" className={card}>
+        <section data-tour="mix" aria-labelledby="mix-heading" className={card}>
           <h2 id="mix-heading" className="text-base font-semibold text-brand-navy-900">
             Where responses came from
           </h2>
@@ -284,7 +298,7 @@ export function DashboardView({
         <p className={`${card} text-center text-sm text-gray-500`}>No counted responses in this view yet.</p>
       ) : (
         summary.groups.slice(0, 1).map((g) => (
-          <section key={g.versionId} aria-label={`Scores for ${g.label}`} className="flex flex-col gap-3">
+          <section data-tour="scores" key={g.versionId} aria-label={`Scores for ${g.label}`} className="flex flex-col gap-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div>
                 <h2 className="text-base font-semibold text-brand-navy-900">Survey performance</h2>
@@ -357,7 +371,7 @@ export function DashboardView({
         ))
       )}
       {summary.groups.length > 1 && (
-        <section aria-labelledby="versions-heading" className={card}>
+        <section data-tour="versions" aria-labelledby="versions-heading" className={card}>
           <h2 id="versions-heading" className="text-base font-semibold text-brand-navy-900">
             Other survey versions in this view
           </h2>
@@ -393,7 +407,7 @@ export function DashboardView({
         </section>
       )}
 
-      <section aria-labelledby="list-heading" className="rounded-2xl border border-gray-200/80 bg-white shadow-sm">
+      <section data-tour="list" aria-labelledby="list-heading" className="rounded-2xl border border-gray-200/80 bg-white shadow-sm">
         <div className="px-5 pt-5">
           <h2 id="list-heading" className="text-base font-semibold text-brand-navy-900">
             Responses
@@ -475,7 +489,7 @@ export function DashboardView({
         </div>
       </section>
 
-      <section aria-labelledby="history-heading" className={card}>
+      <section data-tour="history" aria-labelledby="history-heading" className={card}>
         <div className="flex items-center gap-2.5">
           <span className="rounded-lg bg-slate-100 p-1.5 text-slate-600" aria-hidden="true">
             <History className="size-4" />

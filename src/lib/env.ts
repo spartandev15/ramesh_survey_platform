@@ -20,8 +20,8 @@ const envSchema = z
     // Where customers can ask for help when a survey link cannot be renewed (PDF 03 §3). Unset: they are told to contact the shop.
     SURVEY_HELP_EMAIL: z.preprocess(blankAsUnset, z.email().optional()),
     LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
-    // Proxies in front of the app that append to X-Forwarded-For (a CDN plus a load balancer is 2). With no proxy,
-    // Next.js fills the header from the connection, so 1 is right for both a single proxy and none.
+    // Proxies in front of the app that append to X-Forwarded-For (a CDN plus a load balancer is 2). Next.js keeps a
+    // header the client sent, so the app must sit behind a proxy that sets it; never expose the app port directly.
     TRUSTED_PROXY_HOPS: z.preprocess(blankAsUnset, z.coerce.number().int().min(1).max(5).default(1)),
     // Signs opt-out links. Optional: derived from BETTER_AUTH_SECRET when unset. Set it before rotating that secret so sent links keep working.
     OPT_OUT_SECRET: z.preprocess(blankAsUnset, z.string().min(32, "OPT_OUT_SECRET must be at least 32 characters").optional()),
