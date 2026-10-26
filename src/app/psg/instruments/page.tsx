@@ -9,7 +9,7 @@ import { pageNumber, pageOf } from "@/lib/pagination";
 import { pageRequireCapability } from "@/modules/access/page-guards";
 import { listInstruments } from "@/modules/instruments/instruments";
 import { filterSurveys, latestPublished, parseSurveyFilters, SURVEY_SORTS, SURVEY_STATUSES, SURVEY_TYPES, surveyStatus, type SurveyStatus } from "@/modules/instruments/list-filter";
-import { InstrumentForm } from "./instrument-form";
+import { NewSurvey, type CopySource } from "./new-survey";
 import { ActionsHeader, RowActions } from "@/components/row-actions";
 import { Field, Kpi } from "@/components/ui";
 
@@ -51,6 +51,17 @@ export default async function InstrumentsPage({ searchParams }: PageProps<"/psg/
   const created = monthEnds.map((end) => all.filter((i) => i.createdAt.getTime() < end).length);
   const publishedBy = monthEnds.map((end) => all.filter((i) => i.versions.some((v) => v.publishedAt && v.publishedAt.getTime() < end)).length);
   const lately = (dates: (Date | null)[]) => dates.filter((d) => d && now - d.getTime() < 30 * DAY).length;
+  // Every version of every survey, newest first, for "Copy a survey".
+  const copySources: CopySource[] = all.map((i) => {
+    const versions = [...i.versions].sort((a, b) => b.version - a.version);
+    return {
+      id: i.id,
+      name: i.name,
+      shopQuestions: i.shopId !== null,
+      versions: versions.map((v) => ({ id: v.id, label: `v${v.version} (${v.status === "draft" ? "draft" : v.isTest ? "published, test only" : "published"})` })),
+      defaultVersionId: (latestPublished(i.versions) ?? versions[0]).id,
+    };
+  });
 
   const link = (next: Record<string, string>) => {
     const q = new URLSearchParams();
@@ -282,11 +293,11 @@ export default async function InstrumentsPage({ searchParams }: PageProps<"/psg/
                 <h2 id="new-survey" className="text-base font-semibold text-brand-navy-900">
                   Create new survey
                 </h2>
-                <p className="mt-0.5 text-xs text-gray-500">Starts as an empty draft. Add questions, scoring and alert rules next, then preview and publish.</p>
+                <p className="mt-0.5 text-xs text-gray-500">Start blank or copy an existing survey. Either way it starts as a draft: edit, preview and publish next.</p>
               </div>
             </div>
             <div className="mt-5">
-              <InstrumentForm submitLabel="Create survey" />
+              <NewSurvey sources={copySources} />
             </div>
           </section>
         )}

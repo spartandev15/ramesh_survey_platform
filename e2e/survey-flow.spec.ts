@@ -92,4 +92,14 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await page.waitForURL(/\/edit$/);
   await page.getByRole("button", { name: /repair_rating How satisfied/ }).click();
   await expect(page.getByLabel("Question ID")).toBeDisabled();
+
+  // 9. "Copy a survey" starts a new survey from a chosen version (SR-44 duplication)
+  await page.goto("/psg/instruments");
+  await page.getByText("Copy a survey", { exact: true }).click();
+  await page.getByLabel("Survey to copy").selectOption({ label: name });
+  await expect(page.locator("#copy-version option:checked")).toHaveText("v1 (published, test only)");
+  await expect(page.getByLabel("Survey name")).toHaveValue(`${name} copy`);
+  await page.getByRole("button", { name: "Create copy" }).click();
+  await page.waitForURL(/\/edit$/);
+  await expect(page.getByRole("button", { name: /repair_rating How satisfied/ })).toBeVisible();
 });
