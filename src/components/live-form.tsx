@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useTransition } from "react";
+import { InlineLoading } from "./loading";
 
 /** The form's own visible fields; hidden ones only carry the other filters for a no-JavaScript submit. */
 function fieldsOf(form: HTMLFormElement | null) {
@@ -14,13 +15,13 @@ function fieldsOf(form: HTMLFormElement | null) {
  * tab, owner, test data) and goes back to page 1. Without JavaScript it is a
  * plain GET form, so Enter still works.
  */
-export function LiveForm({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+export function LiveForm({ label, className, spinnerInside = false, children }: { label: string; className?: string; spinnerInside?: boolean; children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const form = useRef<HTMLFormElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
 
   // Keep the fields in step with the address (Back button, links) unless the user is typing in one.
   useEffect(() => {
@@ -67,6 +68,7 @@ export function LiveForm({ label, className, children }: { label: string; classN
       }}
     >
       {children}
+      <InlineLoading pending={pending} inside={spinnerInside} />
     </form>
   );
 }

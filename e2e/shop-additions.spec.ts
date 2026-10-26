@@ -45,9 +45,12 @@ test("PSG adds questions for one shop and customers see them after the shared su
   const instrumentPath = new URL(page.url()).pathname.replace(/\/edit$/, "");
   if (!page.url().endsWith("/edit")) {
     await page.goto(`${instrumentPath}/edit`);
-    // No open draft: start one from the latest published version.
-    if (!page.url().endsWith("/edit")) {
-      await page.getByRole("button", { name: /^New draft from v\d+$/ }).click();
+    // No open draft: the page sends us to the survey (after its loading placeholder), where we start one from
+    // the latest published version.
+    const newDraft = page.getByRole("button", { name: /^New draft from v\d+$/ });
+    await expect(page.getByRole("tab", { name: "Questions" }).or(newDraft)).toBeVisible();
+    if (await newDraft.isVisible()) {
+      await newDraft.click();
       await page.waitForURL(/\/edit$/);
     }
   }

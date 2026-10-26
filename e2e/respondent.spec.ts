@@ -90,6 +90,8 @@ test("a submit whose reply never arrives is recovered without submitting twice",
 
   const phone = await respondentPhone(browser);
   await phone.goto(url);
+  // Answers given before the page's script runs are not saved: wait for it (a slow link to the live site).
+  await phone.waitForLoadState("networkidle");
   await phone.locator("label", { hasText: /^4$/ }).first().click();
   await phone.getByLabel("Yes", { exact: true }).check();
   for (const row of ["Communication during the repair", "Quality of the repair", "Cleanliness of the vehicle at pickup"]) {

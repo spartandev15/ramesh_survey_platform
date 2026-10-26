@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { LinkPending } from "@/components/loading";
 import { PageTour } from "@/components/tour";
 import type { Notice } from "@/modules/notifications/notifications";
 import { NAV_ICONS, SIDEBAR_COOKIE, type NavItem } from "./nav";
@@ -180,6 +181,7 @@ export function DashboardShell({ title, nav, userName, userEmail, search, notifi
                       >
                         <Icon aria-hidden="true" strokeWidth={1.75} className={classes("size-[18px] shrink-0", active ? "text-white" : "text-white/60")} />
                         <span className={compact ? "sr-only" : "truncate"}>{item.label}</span>
+                        {!compact && <LinkPending className="ml-auto size-4 text-white/80" />}
                       </Link>
                     </li>
                   );

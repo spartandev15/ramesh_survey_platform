@@ -46,6 +46,7 @@ export async function signInAs(page: Page, email: string, password: string, land
  */
 export async function findOnPages(page: Page, target: Locator, pager: Locator = page.getByRole("navigation", { name: / pages$/ }).first()): Promise<boolean> {
   for (;;) {
+    await pageLoaded(page);
     if ((await target.count()) > 0) return true;
     const next = pager.getByRole("link", { name: "Next", exact: true });
     if ((await next.count()) === 0) return false;
@@ -53,6 +54,11 @@ export async function findOnPages(page: Page, target: Locator, pager: Locator = 
     await next.click();
     await expect(pager.locator('[aria-current="page"]')).toHaveText(`Page ${current + 1}`);
   }
+}
+
+/** Wait until the page's own "Loading…" placeholder (src/components/loading.tsx) has been replaced by the page. */
+export async function pageLoaded(page: Page) {
+  await expect(page.getByText("Loading…", { exact: true })).toHaveCount(0);
 }
 
 /** Go to a paged list and fail clearly when the target is on none of its pages. */
@@ -67,6 +73,7 @@ export async function openShop(page: Page, name: string) {
   await gotoAndFind(page, "/psg/shops", link);
   await link.click();
   await page.waitForURL(/\/psg\/shops\/[0-9a-f-]{36}/);
+  await pageLoaded(page);
 }
 
 /** Create a shop from the shop list's Add shop popup and open it through the success message's link. */

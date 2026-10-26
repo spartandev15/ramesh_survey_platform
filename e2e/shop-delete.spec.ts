@@ -68,7 +68,9 @@ test("PSG sees a shop's public link and QR code in popups, then deletes the shop
   await confirm.getByRole("button", { name: "Yes, delete" }).click();
   await page.waitForURL(/\/psg\/shops$/);
   expect(await findOnPages(page, page.getByRole("link", { name, exact: true }))).toBe(false);
-  expect((await page.goto(shopUrl))?.status()).toBe(404);
+  // The page streams behind its loading placeholder, so the status is already sent: the not-found page shows instead.
+  await page.goto(shopUrl);
+  await expect(page.getByText("This page could not be found.")).toBeVisible();
   expect((await page.request.get(`${shopUrl}/qr`)).status()).toBe(404);
   // Its users lose the shop too: dashboard, follow-up cases and notifications.
   for (const path of [`/shop/${shopUser.shopId}`, `/shop/${shopUser.shopId}/cases`]) {

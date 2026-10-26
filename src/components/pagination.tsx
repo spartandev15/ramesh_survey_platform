@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LinkPending } from "./loading";
 
 interface PaginationProps {
   page: number;
@@ -43,7 +44,7 @@ export function Pagination({ page, pageCount, total, size, path, query = {}, par
   };
   const first = (page - 1) * size + 1;
   const last = Math.min(page * size, total);
-  const link = "rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm text-brand-navy-900 hover:bg-gray-50";
+  const link = "inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm text-brand-navy-900 hover:bg-gray-50";
 
   return (
     <nav aria-label={label} className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -54,6 +55,7 @@ export function Pagination({ page, pageCount, total, size, path, query = {}, par
         {page > 1 && (
           <Link href={href(page - 1)} className={link} rel="prev">
             Previous
+            <LinkPending className="size-3.5" />
           </Link>
         )}
         {visiblePages(page, pageCount).map((p, i) =>
@@ -70,12 +72,14 @@ export function Pagination({ page, pageCount, total, size, path, query = {}, par
             <Link key={p} href={href(p)} className={link}>
               <span className="sr-only">Page </span>
               {p}
+              <LinkPending className="size-3.5" />
             </Link>
           ),
         )}
         {page < pageCount && (
           <Link href={href(page + 1)} className={link} rel="next">
             Next
+            <LinkPending className="size-3.5" />
           </Link>
         )}
       </div>

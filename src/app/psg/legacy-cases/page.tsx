@@ -93,7 +93,7 @@ export default async function LegacyCasesPage({ searchParams }: PageProps<"/psg/
             <h2 id="cases-heading" className="text-lg font-semibold text-brand-navy-900">
               Cases <span className="font-normal text-gray-500">({list.total})</span>
             </h2>
-            <LiveForm label="Find cases" className="relative w-full sm:w-72">
+            <LiveForm label="Find cases" className="relative w-full sm:w-72" spinnerInside>
               {Object.entries(base).map(([k, v]) => (k === "q" ? null : <input key={k} type="hidden" name={k} value={v} />))}
               <label htmlFor="legacy-search" className="sr-only">
                 Search cases

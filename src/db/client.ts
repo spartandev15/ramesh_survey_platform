@@ -1,5 +1,6 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { logger } from "@/lib/logger";
 import * as schema from "./schema";
 
 export type Database = NodePgDatabase<typeof schema>;
@@ -13,7 +14,18 @@ function createPool(): Pool {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is required");
   // A blank or invalid DATABASE_POOL_MAX keeps the default instead of a pool of zero.
-  return new Pool({ connectionString, max: Number(process.env.DATABASE_POOL_MAX) || 10 });
+  // Idle connections close after pg's default 10 seconds: on shared hosting, keeping them for minutes made
+  // sign-ins hang (most likely connections cut without notice). Waiting for a connection gives up after 15 seconds
+  // instead of hanging a page. Idle connections do not keep a finished script running.
+  const pool = new Pool({
+    connectionString,
+    max: Number(process.env.DATABASE_POOL_MAX) || 10,
+    connectionTimeoutMillis: 15_000,
+    allowExitOnIdle: true,
+  });
+  // The database (or its pooler) may close an idle connection; without a listener that error stops the process.
+  pool.on("error", (error) => logger.warn({ err: error }, "idle database connection closed"));
+  return pool;
 }
 
 export function getPool(): Pool {

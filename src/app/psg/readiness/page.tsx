@@ -91,7 +91,7 @@ export default async function ReadinessPage({ searchParams }: PageProps<"/psg/re
               <p className="text-sm text-gray-500">Each shop shows what is still missing before it can go Live.</p>
             </div>
           </div>
-          <LiveForm label="Find a shop" className="relative w-full sm:w-72">
+          <LiveForm label="Find a shop" className="relative w-full sm:w-72" spinnerInside>
             {Object.entries(base).map(([k, v]) => (k === "q" ? null : <input key={k} type="hidden" name={k} value={v} />))}
             <label htmlFor="readiness-search" className="sr-only">
               Search shops
