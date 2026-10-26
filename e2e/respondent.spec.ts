@@ -80,3 +80,45 @@ test("respondent can resume, is guided through errors, and submits exactly once"
   await expect(newest).toContainText("Submitted");
   await expect(newest.getByRole("link", { name: "View answers and scores" })).toHaveCount(1);
 });
+
+test("a submit whose reply never arrives is recovered without submitting twice", async ({ page, browser }) => {
+  test.setTimeout(240_000);
+  await signIn(page);
+  await ensureTestShop(page);
+  await openDemoSurvey(page);
+  const url = await createTestLink(page);
+
+  const phone = await respondentPhone(browser);
+  await phone.goto(url);
+  await phone.locator("label", { hasText: /^4$/ }).first().click();
+  await phone.getByLabel("Yes", { exact: true }).check();
+  for (const row of ["Communication during the repair", "Quality of the repair", "Cleanliness of the vehicle at pickup"]) {
+    await phone.getByRole("group", { name: row }).getByLabel("Good").check();
+  }
+  await expect(phone.locator('[role="status"]', { hasText: /Saved [0-9]/ })).toBeVisible();
+  await phone.getByRole("button", { name: "Next", exact: true }).click();
+  await phone.locator('input[name="survey-recommend_score"]').nth(9).check({ force: true });
+  await expect(phone.locator('[role="status"]', { hasText: /Saved [0-9]/ })).toBeVisible();
+
+  // 1. The submit never reaches the server and no reply comes: the respondent is told, and the answers stay.
+  const isPost = (request: { method(): string }) => request.method() === "POST";
+  await phone.route("**/survey/**", (route) => (isPost(route.request()) ? undefined : route.continue()));
+  await phone.getByRole("button", { name: "Submit survey" }).click();
+  await expect(phone.getByText("Your survey could not be submitted")).toBeVisible({ timeout: 45_000 });
+  await expect(phone.locator('input[name="survey-recommend_score"]:checked')).toHaveValue("9");
+  await phone.unroute("**/survey/**");
+
+  // 2. The submit reaches the server but its reply is lost: the page shows the thank-you page by itself.
+  await phone.route("**/survey/**", async (route) => {
+    if (!isPost(route.request())) return route.continue();
+    await route.fetch();
+  });
+  await phone.getByRole("button", { name: "Submit survey" }).click();
+  await expect(phone.getByRole("heading", { name: "Thank you for your feedback" })).toBeVisible({ timeout: 45_000 });
+  await phone.unroute("**/survey/**");
+
+  // Trying again (same request key) never makes a second response: PSG sees one submitted link.
+  await page.reload();
+  const newest = page.locator('section[aria-labelledby="test-links"] tbody tr').first();
+  await expect(newest).toContainText("Submitted");
+});

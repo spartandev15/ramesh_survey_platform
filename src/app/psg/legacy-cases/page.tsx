@@ -111,7 +111,7 @@ export default async function LegacyCasesPage({ searchParams }: PageProps<"/psg/
               />
             </LiveForm>
           </div>
-          <div className="relative overflow-x-auto border-t border-gray-100">
+          <div tabIndex={0} className="relative overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 border-t border-gray-100">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="bg-gray-50/70 text-[11px] uppercase tracking-wide text-gray-500">
                 <tr>

@@ -2,6 +2,22 @@
 
 Each delivery with its commit, what changed, how it was verified and what is still open. Requirement status is in [traceability.md](traceability.md); open gates and proposals are in [open-items.md](open-items.md).
 
+## 2026-10-26: test deployment on shared hosting, fixes from testing it live
+
+**Where:** `https://survey.spartanbots.xyz` (Namecheap shared cPanel hosting, database on Supabase). Setup is in the runbook, section 1a.
+
+**Fixed**
+
+- A survey page no longer waits forever when the reply to a save or a submit never arrives: after 20 seconds it reloads its state from the server (the thank-you page, if the submit arrived), keeps the answers on screen and asks the customer to try again. Trying again never submits twice.
+- Forms that redirect after saving reached the wrong address on this host (the app is handed a socket, not a port).
+- The worker's job queue could use up the database's 15-client limit; app and queue connections are now set separately (`DATABASE_POOL_MAX`, `QUEUE_POOL_MAX`).
+- Long tables can be scrolled with the keyboard (axe `scrollable-region-focusable`).
+- The web app's log is kept on this host (`stderr.log`) and kept under 10 MB.
+
+**Verified on the live site:** all 18 browser test files (25 tests) pass against `survey.spartanbots.xyz`, including a new test for the lost-reply recovery; 345 unit and database tests pass locally; no email left the server during testing (`EMAIL_PROVIDER=log`).
+
+**Open:** the cron line for the worker, deleting `admin-password.txt` after reading it, a captcha on public pages (deferred), and test data on the live database to clear before real use.
+
 ## 2026-10-26: full audit fixes, dashboard question results, Copy a survey
 
 **Branch:** `main` · **Previous delivery:** `7848df4` (2026-09-29). In between: `5d9ce14` (09-30, migrations 0030 and 0031), the 10-23 deliveries (page tours, working top-bar search and notification bell, bundled worker and scripts, backup and reverse-proxy files, Next.js 16.4.2 for security advisories) and the 10-26 deliveries below.

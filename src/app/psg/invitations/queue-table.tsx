@@ -102,7 +102,7 @@ export function QueueTable({ shopId, items, selectable, canManage }: { shopId: s
         </div>
       )}
 
-      <div className="relative overflow-x-auto rounded-2xl border border-gray-200/80 bg-white shadow-sm">
+      <div tabIndex={0} className="relative overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-2xl border border-gray-200/80 bg-white shadow-sm">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-gray-100 bg-gray-50/70 text-[11px] uppercase tracking-wide text-gray-500">
             <tr>

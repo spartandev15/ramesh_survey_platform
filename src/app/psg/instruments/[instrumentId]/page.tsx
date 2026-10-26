@@ -171,7 +171,7 @@ function MetricName({ id, label }: { id: string; label: string }) {
 
 function RuleTable({ head, rows, empty }: { head: string[]; rows: React.ReactNode[][]; empty: string }) {
   return (
-    <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <div tabIndex={0} className="mt-3 overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-xl border border-gray-200 bg-white">
       <table className="w-full text-left text-sm">
         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
           <tr>

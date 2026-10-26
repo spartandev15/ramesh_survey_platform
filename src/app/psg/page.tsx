@@ -227,7 +227,7 @@ export default async function PsgOverviewPage({ searchParams }: PageProps<"/psg"
           {project.topShops.length === 0 ? (
             <p className="py-4 text-sm text-gray-500">No responses in the last 90 days.</p>
           ) : (
-            <div className="relative -mx-5 overflow-x-auto">
+            <div tabIndex={0} className="relative -mx-5 overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
               <table className="w-full min-w-[34rem] text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-500">

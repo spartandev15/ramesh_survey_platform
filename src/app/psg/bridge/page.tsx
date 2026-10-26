@@ -198,7 +198,7 @@ export default async function BridgePage({ searchParams }: PageProps<"/psg/bridg
         <div className="p-5 pb-0">
           <SectionHead icon={AlertTriangle} id="bridge-problems" title="Needs attention" tone="bg-amber-50 text-amber-600" />
         </div>
-        <div className="relative mt-3 overflow-x-auto border-t border-gray-100">
+        <div tabIndex={0} className="relative mt-3 overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 border-t border-gray-100">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-gray-50/70 text-[11px] uppercase tracking-wide text-gray-500">
               <tr>

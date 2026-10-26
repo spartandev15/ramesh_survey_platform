@@ -135,7 +135,7 @@ function BarRow({ bar, of, question, href }: { bar: Bar; of: number; question: s
 
 function Matrix({ result, filterHref }: { result: Extract<QuestionResult, { kind: "matrix" }>; filterHref: (answer: string) => string }) {
   return (
-    <div className="relative overflow-x-auto">
+    <div tabIndex={0} className="relative overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
       <table className="w-full min-w-[480px] text-left text-sm">
         <thead className="text-xs text-gray-500">
           <tr>

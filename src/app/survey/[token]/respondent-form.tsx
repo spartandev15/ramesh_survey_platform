@@ -18,6 +18,18 @@ type SaveStatus =
   | { kind: "failed"; message: string; reload?: boolean };
 
 const AUTOSAVE_DELAY_MS = 800;
+// A reply that has not arrived by then is treated as lost (seen behind a shared host's proxy).
+const REPLY_TIMEOUT_MS = 20_000;
+
+class ReplyTimeout extends Error {}
+
+function withReplyTimeout<T>(reply: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new ReplyTimeout()), REPLY_TIMEOUT_MS);
+  });
+  return Promise.race([reply, timeout]).finally(() => clearTimeout(timer));
+}
 
 interface RespondentFormProps {
   token: string;
@@ -58,6 +70,11 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
   // Focus to move once the given page is on screen: the URL change renders it a little later than our own state.
   const pendingFocus = useRef<{ to: "heading" | "summary"; page: number } | null>(null);
 
+  // Next.js runs server actions one at a time: one whose reply never arrives holds back every later save and the
+  // submit. A navigation takes its place, and reloads the page's state from the server (the thank-you page, if the
+  // submit did arrive). The answers on screen are kept.
+  const releaseLostReply = useCallback(() => router.replace(`${window.location.pathname}${window.location.search}`, { scroll: false }), [router]);
+
   const questions = useMemo(() => allQuestions(definition), [definition]);
   const byId = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions]);
   const evaluated = useMemo(() => evaluateAnswers(definition, answers, "draft"), [definition, answers]);
@@ -81,7 +98,7 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
     dirty.current = false;
     setStatus({ kind: "saving" });
     try {
-      const result = await saveDraftAction({ token, expectedRevision: revision.current, answers: snapshot, unconfirmed: unconfirmed.current });
+      const result = await withReplyTimeout(saveDraftAction({ token, expectedRevision: revision.current, answers: snapshot, unconfirmed: unconfirmed.current }));
       if (result.ok) {
         revision.current = result.revision;
         unconfirmed.current = undefined;
@@ -94,18 +111,19 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
         dirty.current = true;
         setStatus({ kind: "failed", message: result.reason === "rate_limited" ? "Saving is paused for a moment." : "Your answers could not be saved." });
       }
-    } catch {
+    } catch (error) {
       dirty.current = true;
       // The save may have reached the server even though its reply did not: say so on the next request.
       unconfirmed.current = snapshot;
       setStatus({ kind: "failed", message: "Your answers could not be saved. Check your connection." });
+      if (error instanceof ReplyTimeout) releaseLostReply();
     } finally {
       saving.current = false;
       // Answers typed while this save was in flight are saved next.
       if (dirty.current && timer.current === null) timer.current = setTimeout(runScheduled, AUTOSAVE_DELAY_MS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runScheduled is stable and defined below
-  }, [definition, router, token]);
+  }, [definition, releaseLostReply, router, token]);
 
   const runScheduled = useCallback(() => {
     timer.current = null;
@@ -209,7 +227,7 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
     try {
       // Let an autosave already in flight finish, so its revision is the one we send.
       for (let waited = 0; saving.current && waited < 5000; waited += 100) await new Promise((r) => setTimeout(r, 100));
-      const result = await submitAction({ token, requestKey: requestKey.current, expectedRevision: revision.current, answers: latest.current, unconfirmed: unconfirmed.current });
+      const result = await withReplyTimeout(submitAction({ token, requestKey: requestKey.current, expectedRevision: revision.current, answers: latest.current, unconfirmed: unconfirmed.current }));
       if (result.ok || result.reason === "already_submitted" || result.reason === "expired") {
         dirty.current = false;
         router.refresh();
@@ -229,8 +247,10 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
       } else {
         setSubmitError(result.reason === "rate_limited" ? "Too many attempts. Please wait a minute and try again." : "Your survey could not be submitted.");
       }
-    } catch {
+    } catch (error) {
       setSubmitError("Your survey could not be submitted. Check your connection and try again; your answers are kept.");
+      // If the submit did arrive, this shows the thank-you page; trying again never submits twice (same request key).
+      if (error instanceof ReplyTimeout) releaseLostReply();
     } finally {
       setSubmitting(false);
     }

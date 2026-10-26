@@ -27,7 +27,7 @@ export default async function ShopCasesPage({ params, searchParams }: PageProps<
     <div className="max-w-5xl">
       <h1 className="text-2xl font-semibold text-brand-navy-900">Follow-up</h1>
       <p className="mt-1 max-w-2xl text-sm text-gray-600">Customer feedback PSG has asked you to follow up. Add what you did, then ask PSG to close it once the customer is taken care of.</p>
-      <div className="relative mt-6 overflow-x-auto rounded-xl border border-gray-200 bg-white">
+      <div tabIndex={0} className="relative mt-6 overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-xl border border-gray-200 bg-white">
         <table className="w-full min-w-[600px] text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>

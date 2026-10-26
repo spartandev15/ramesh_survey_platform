@@ -40,7 +40,9 @@ async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is required");
 
-  const boss = new PgBoss(connectionString);
+  // The queue keeps its own connections next to the app pool; a pooled database with a small client limit
+  // (Supabase's session pooler allows 15) needs it small (QUEUE_POOL_MAX).
+  const boss = new PgBoss({ connectionString, max: Number(process.env.QUEUE_POOL_MAX) || 10 });
   boss.on("error", (error) => logger.error({ err: error }, "pg-boss error"));
   await boss.start();
 

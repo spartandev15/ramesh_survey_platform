@@ -10,6 +10,12 @@ APP_DIR="${APP_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 NODE_BIN="${NODE_BIN:-/opt/alt/alt-nodejs24/root/usr/bin/node}"
 PID_FILE="$APP_DIR/worker.pid"
 LOG_FILE="$APP_DIR/logs/worker.log"
+WEB_LOG="$APP_DIR/stderr.log"
+
+# The web app's log (written by the web server) is kept small the same way, in place, as the server holds it open.
+if [ -f "$WEB_LOG" ] && [ "$(wc -c < "$WEB_LOG")" -gt 10485760 ]; then
+  cp "$WEB_LOG" "$WEB_LOG.1" && : > "$WEB_LOG"
+fi
 
 if [ -f "$PID_FILE" ]; then
   pid="$(cat "$PID_FILE")"

@@ -82,7 +82,8 @@ test("public, paper, duplicate and correction flows", async ({ page, browser }) 
   await answerDemo(page, "paper", "4");
   await page.getByRole("button", { name: "Save paper survey" }).click();
   await page.waitForURL(/\/psg\/responses\/[0-9a-f-]{36}$/);
-  await expect(page.getByText(`Paper · received ${today} · entered by E2E Test Admin`)).toBeVisible();
+  // Whoever is signed in entered it (the test account's name differs between environments).
+  await expect(page.getByText(new RegExp(`^Paper · received ${today} · entered by \\S`))).toBeVisible();
   await expect(page.getByText("Counted", { exact: true })).toBeVisible();
   const firstPaper = page.url();
 

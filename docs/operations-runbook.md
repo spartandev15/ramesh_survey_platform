@@ -22,7 +22,9 @@ Used for the test deployment at `survey.spartanbots.xyz` (Namecheap shared hosti
 - **App:** create the Node.js app (Node 24, application root = that folder, the subdomain, startup file `app.js`, production mode), for example `cloudlinux-selector create --interpreter nodejs --version 24 --app-root psg-survey-app --domain <subdomain> --app-uri / --app-mode production --startup-file app.js`. The selector refuses a folder that already holds `node_modules`: rename it for the create and rename it back afterwards. It writes only a `.htaccess` into the subdomain folder.
 - **Migrations and first admin:** `node --env-file=.env dist/migrate.mjs`, then `node --env-file=.env dist/create-admin.mjs <email> "<name>" > admin-password.txt` with `umask 077`; the admin reads the file once and deletes it.
 - **Worker:** shared hosting may stop long-running processes, so cron runs `worker-keepalive.sh` every minute; it starts the worker only when it is not running. `/api/health` reports a stopped worker.
-- **Update:** upload the new files, run migrations, then `cloudlinux-selector restart --interpreter nodejs --app-root psg-survey-app` and stop the worker (`kill $(cat worker.pid)`) so cron starts the new one.
+- **Logs:** the web app's log is `stderr.log` in the app folder (the web server keeps only stderr, so `app.js` sends the app's log there); the worker's is `logs/worker.log`. The keepalive script keeps each under 10 MB with one older copy. "The Server Reference ID did not match the expected format" lines come from internet scanners probing for a known Next.js flaw this version does not have.
+- **Lost replies:** behind the shared host's proxy, a form's reply can occasionally never arrive. The survey page gives up waiting after 20 seconds: it reloads its state from the server (the thank-you page, if the submit arrived) and keeps the answers on screen. Trying again never submits twice.
+- **Update:** upload the new files, run migrations, then `cloudlinux-selector restart --interpreter nodejs --app-root psg-survey-app`. LiteSpeed can keep the old `next-server` process running after that, still serving the old pages (their CSS then fails with 500): stop the process whose working folder is this app (`readlink /proc/<pid>/cwd`), never another app's. Stop the worker too (`kill $(cat worker.pid)`) so cron starts the new one.
 
 ## 2. Configuration
 
@@ -31,6 +33,7 @@ All settings are environment variables; `.env.example` lists them.
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL 17 connection |
+| `DATABASE_POOL_MAX`, `QUEUE_POOL_MAX` | Connections per process for the app (default 10) and for the worker's job queue (default 10). Keep their total, over every web process and the worker, under the database's limit: Supabase's session pooler allows 15 clients, so the shared-hosting setup uses 3 and 2 |
 | `APP_URL` | Public address of the app, used in email links |
 | `BETTER_AUTH_SECRET` | At least 32 random characters |
 | `EMAIL_PROVIDER`, `EMAIL_FROM`, `SENDGRID_API_KEY` | `sendgrid` in production; `log` prints emails locally |

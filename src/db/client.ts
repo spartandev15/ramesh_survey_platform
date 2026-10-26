@@ -12,7 +12,8 @@ const globalForDb = globalThis as unknown as { psgPool?: Pool; psgDb?: Database 
 function createPool(): Pool {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is required");
-  return new Pool({ connectionString, max: Number(process.env.DATABASE_POOL_MAX ?? 10) });
+  // A blank or invalid DATABASE_POOL_MAX keeps the default instead of a pool of zero.
+  return new Pool({ connectionString, max: Number(process.env.DATABASE_POOL_MAX) || 10 });
 }
 
 export function getPool(): Pool {

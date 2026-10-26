@@ -121,7 +121,7 @@ export default async function ImportBatchPage({ params, searchParams }: PageProp
         <h2 id="rows-heading" className="text-base font-semibold text-brand-navy-900">
           {committed ? "Row outcomes" : "What each row will do"}
         </h2>
-        <div className="relative mt-3 overflow-x-auto rounded-xl border border-gray-200 bg-white">
+        <div tabIndex={0} className="relative mt-3 overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-xl border border-gray-200 bg-white">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>

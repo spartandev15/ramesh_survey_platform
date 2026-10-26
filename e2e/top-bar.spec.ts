@@ -26,8 +26,10 @@ test("top bar search finds pages and shops, and the bell lists waiting work", as
 
   // Bell: the badge count is the sum of the listed items, and each item opens its page.
   const bell = page.getByRole("button", { name: /^Notifications/ });
-  const name = (await bell.getAttribute("aria-label")) ?? "";
   await bell.click();
+  // The list loads after each page change ("Checking…"); read the counts only once it has arrived.
+  await expect(page.getByText("Checking…")).toHaveCount(0);
+  const name = (await bell.getAttribute("aria-label")) ?? "";
   const items = page.locator("header li a");
   const counts = await items.locator("span").allTextContents();
   const total = counts.reduce((n, c) => n + Number(c), 0);

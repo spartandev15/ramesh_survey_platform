@@ -131,7 +131,7 @@ export default async function SuppressionPage({ searchParams }: PageProps<"/psg/
       </div>
 
       <div className="rounded-2xl border border-gray-200/80 bg-white shadow-sm">
-        <div className="relative overflow-x-auto">
+        <div tabIndex={0} className="relative overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="border-b border-gray-100 text-[11px] uppercase tracking-wide text-gray-500">
               <tr>
