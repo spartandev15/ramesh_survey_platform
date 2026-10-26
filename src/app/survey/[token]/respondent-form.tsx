@@ -48,6 +48,8 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
   const latest = useRef(answers);
   const saving = useRef(false);
   const dirty = useRef(false);
+  // Answers of a save whose reply never came back; the server checks whether it committed (SR-16).
+  const unconfirmed = useRef<Answers | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // One key per page load: a double click or network retry replays the same submission (AT-17).
   const requestKey = useRef<string>(crypto.randomUUID());
@@ -79,9 +81,10 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
     dirty.current = false;
     setStatus({ kind: "saving" });
     try {
-      const result = await saveDraftAction({ token, expectedRevision: revision.current, answers: snapshot });
+      const result = await saveDraftAction({ token, expectedRevision: revision.current, answers: snapshot, unconfirmed: unconfirmed.current });
       if (result.ok) {
         revision.current = result.revision;
+        unconfirmed.current = undefined;
         setStatus({ kind: "saved", at: new Date(result.savedAt) });
       } else if (result.reason === "submitted" || result.reason === "expired") {
         router.refresh();
@@ -93,6 +96,8 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
       }
     } catch {
       dirty.current = true;
+      // The save may have reached the server even though its reply did not: say so on the next request.
+      unconfirmed.current = snapshot;
       setStatus({ kind: "failed", message: "Your answers could not be saved. Check your connection." });
     } finally {
       saving.current = false;
@@ -204,7 +209,7 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
     try {
       // Let an autosave already in flight finish, so its revision is the one we send.
       for (let waited = 0; saving.current && waited < 5000; waited += 100) await new Promise((r) => setTimeout(r, 100));
-      const result = await submitAction({ token, requestKey: requestKey.current, expectedRevision: revision.current, answers: latest.current });
+      const result = await submitAction({ token, requestKey: requestKey.current, expectedRevision: revision.current, answers: latest.current, unconfirmed: unconfirmed.current });
       if (result.ok || result.reason === "already_submitted" || result.reason === "expired") {
         dirty.current = false;
         router.refresh();

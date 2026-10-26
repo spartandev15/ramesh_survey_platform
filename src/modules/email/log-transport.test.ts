@@ -12,6 +12,12 @@ describe("survey links in logs (SR-40)", () => {
     expect(redacted).toBe("Hi Avery,\nStart: https://survey.test/survey/[redacted]\nStop emails: https://survey.test/survey/opt-out/[redacted]\nThanks");
   });
 
+  it("redacts password-reset links, which can take over an account", () => {
+    const reset = "https://survey.test/api/auth/reset-password/aB3dE5fG7hJ9kL1mN3pQ?callbackURL=%2Freset-password";
+    expect(redactSurveyLinks(`Set your password: ${reset}`)).toBe("Set your password: https://survey.test/api/auth/reset-password/[redacted]?callbackURL=%2Freset-password");
+    expect(redactSurveyLinks("https://survey.test/reset-password?token=aB3dE5fG7hJ9kL1mN3pQ&x=1")).toBe("https://survey.test/reset-password?token=[redacted]&x=1");
+  });
+
   it("leaves the public shop link alone, which carries no secret", () => {
     expect(redactSurveyLinks("https://survey.test/survey/shop/joes-body-shop")).toBe("https://survey.test/survey/shop/joes-body-shop");
   });

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { inOrder, type Tx } from "@/db/client";
 import {
   accessToken,
@@ -317,7 +317,25 @@ export async function correctInvitation(tx: Tx, actor: Actor, shopId: string, id
   const after = { email: emailNormalized ? email : null, deliveredOn };
   if (before.email === after.email && before.deliveredOn === after.deliveredOn) return { revision: row.revision };
 
-  await tx.update(customer).set({ email: after.email, emailNormalized }).where(eq(customer.id, row.customerId));
+  if (before.email !== after.email) {
+    // Imports reuse one customer per email, so other visits may share this row. Changing it in place would
+    // redirect their reminders too: such a visit gets its own copy of the customer instead.
+    const [shared] = await tx
+      .select({ id: repairVisit.id })
+      .from(repairVisit)
+      .where(and(eq(repairVisit.customerId, row.customerId), ne(repairVisit.id, row.visitId)))
+      .limit(1);
+    if (shared) {
+      const [current] = await tx.select().from(customer).where(eq(customer.id, row.customerId));
+      const [copy] = await tx
+        .insert(customer)
+        .values({ shopId: current.shopId, isTest: current.isTest, firstName: current.firstName, lastName: current.lastName, phone: current.phone, email: after.email, emailNormalized })
+        .returning({ id: customer.id });
+      await tx.update(repairVisit).set({ customerId: copy.id }).where(eq(repairVisit.id, row.visitId));
+    } else {
+      await tx.update(customer).set({ email: after.email, emailNormalized }).where(eq(customer.id, row.customerId));
+    }
+  }
   await tx.update(repairVisit).set({ deliveredOn, deliveredOnRaw: deliveredOn ?? row.deliveredOnRaw }).where(eq(repairVisit.id, row.visitId));
   const [updated] = await tx.update(invitation).set({ revision: row.revision + 1, updatedAt: now }).where(eq(invitation.id, id)).returning({ revision: invitation.revision });
   await recordAudit({ ...auditActor(actor), shopId, action: "invitation.contact_corrected", subjectType: "invitation", subjectId: id, before, after }, tx);

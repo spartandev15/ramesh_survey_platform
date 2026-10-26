@@ -13,7 +13,7 @@ try {
 
 describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async () => {
   const { getDb, getPool } = await import("@/db/client");
-  const { alertCase, auditEvent, emailIntent, invitation, matchDecision, repairVisit, responseRevision, shop, shopSuggestion, shopSurveySettings, surveyResponse } = await import("@/db/schema");
+  const { alertCase, auditEvent, emailIntent, invitation, matchDecision, repairVisit, responseRevision, shop, shopSuggestion, shopSurveySettings, surveyResponse, user } = await import("@/db/schema");
   const instruments = await import("@/modules/instruments/store");
   const { demoDefinition } = await import("@/modules/instruments/demo-definition");
   const settings = await import("@/modules/shops/settings-store");
@@ -81,7 +81,10 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
   it("paper and identical online answers score the same; paper provenance is audited (AT-18)", () =>
     inRollback(async (tx) => {
       const { shop: s, visit } = await shopWithVisits(tx, ["P1,Jo,Smith,jo@example.com", "P2,Al,Lee,al@example.com"]);
-      const paper = await staff.submitPaper(tx, actor, { shopId: s.id, visitId: visit("P1").id, receivedOn: "2026-09-20", answers: complete, requestKey: `k-${unique()}` });
+      // A named staff member enters the paper form, so the record says who entered it.
+      const [person] = await tx.insert(user).values({ id: `clerk-${unique()}`, name: "Paper Clerk", email: `clerk-${unique()}@psg.test` }).returning();
+      const clerk = { type: "user", userId: person.id } as const;
+      const paper = await staff.submitPaper(tx, clerk, { shopId: s.id, visitId: visit("P1").id, receivedOn: "2026-09-20", answers: complete, requestKey: `k-${unique()}` });
       const [inv] = await tx.select().from(invitation).where(eq(invitation.visitId, visit("P2").id));
       const link = await invitations.issuePrintableLink(tx, actor, s.id, inv.id);
       const online = await responses.submitResponse(tx, link.token, `k-${unique()}`, complete);
@@ -93,11 +96,12 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
       expect(paperRev.definitionHash).toBe(onlineRev.definitionHash);
 
       const row = await responseRow(tx, paper.responseId);
-      expect(row).toMatchObject({ source: "paper", receivedOn: "2026-09-20", canonical: true, matchStatus: "matched" });
+      expect(row).toMatchObject({ source: "paper", receivedOn: "2026-09-20", canonical: true, matchStatus: "matched", enteredBy: person.id });
       const [audit] = await tx.select().from(auditEvent).where(and(eq(auditEvent.subjectId, paper.responseId), eq(auditEvent.action, "response.paper_entered")));
+      expect(audit).toMatchObject({ actorType: "user", actorUserId: person.id });
       expect(audit.after).toMatchObject({ source: "paper", receivedOn: "2026-09-20" });
       // The paper response stops the visit's pending reminder and initial send.
-      const replay = await staff.submitPaper(tx, actor, { shopId: s.id, visitId: visit("P1").id, receivedOn: "2026-09-20", answers: complete, requestKey: row.submitRequestKey! });
+      const replay = await staff.submitPaper(tx, clerk, { shopId: s.id, visitId: visit("P1").id, receivedOn: "2026-09-20", answers: complete, requestKey: row.submitRequestKey! });
       expect(replay).toEqual({ responseId: paper.responseId, replayed: true });
       // The same key with different answers is refused, never saved as a second entry.
       await expect(staff.submitPaper(tx, actor, { shopId: s.id, visitId: visit("P1").id, receivedOn: "2026-09-20", answers: happy, requestKey: row.submitRequestKey! })).rejects.toMatchObject({ kind: "conflict" });
@@ -300,9 +304,10 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
       expect(full?.revisions.map((r) => r.revision)).toEqual([1, 2]);
       expect(full?.revisions[0].answers).toMatchObject({ overall_rating: 2 });
       expect(full?.revisions[1]).toMatchObject({ reason: "Entered the wrong rating from the paper form", answers: { overall_rating: 5 } });
-      const alertsBefore = (full!.revisions[0].outcomes.alerts ?? []).length;
-      const alertsAfter = (full!.revisions[1].outcomes.alerts ?? []).length;
-      expect(result.alertsChanged).toBe(alertsBefore !== alertsAfter || JSON.stringify(full!.revisions[0].outcomes.alerts) !== JSON.stringify(full!.revisions[1].outcomes.alerts));
+      // A rating of 2 raised an alert; the corrected 5 does not, so the correction must say the alert outcome changed.
+      expect(full!.revisions[0].outcomes.alerts?.length).toBeGreaterThan(0);
+      expect(full!.revisions[1].outcomes.alerts ?? []).toHaveLength(0);
+      expect(result.alertsChanged).toBe(true);
       // Stale editors are refused; revisions are append-only in the database.
       await expect(staff.correctResponse(tx, actor, paper.responseId, 1, complete, "Changed my mind")).rejects.toMatchObject({ kind: "conflict" });
       await expect(tx.transaction((inner) => inner.update(responseRevision).set({ reason: "x" }).where(eq(responseRevision.responseId, paper.responseId)))).rejects.toThrow();

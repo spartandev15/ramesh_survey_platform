@@ -196,12 +196,25 @@ export type SaveResult =
  * score. `expectedRevision` must match the stored revision, so an older tab
  * cannot overwrite newer answers (AT-16).
  */
-export async function saveDraft(tx: Tx, token: string, expectedRevision: number, input: unknown, now = new Date()): Promise<SaveResult> {
+/**
+ * The revision this tab really built on. A save whose reply was lost (a dropped
+ * connection) still committed; the tab sends those answers again as `unconfirmed`.
+ * When the server's newest draft is exactly that save, the tab is not stale.
+ */
+function confirmedRevision(definition: InstrumentDefinition, response: { draftRevision: number; draftAnswers: unknown } | null, expected: number, unconfirmed: unknown): number {
+  const current = response?.draftRevision ?? 0;
+  if (unconfirmed === undefined || !response || current !== expected + 1) return expected;
+  const evaluated = evaluateAnswers(definition, unconfirmed, "draft");
+  return evaluated.errors.length === 0 && definitionHash(evaluated.answers) === definitionHash(response.draftAnswers) ? current : expected;
+}
+
+export async function saveDraft(tx: Tx, token: string, expectedRevision: number, input: unknown, now = new Date(), unconfirmed?: unknown): Promise<SaveResult> {
   const resolved = await resolve(tx, token, now, true);
   if (!resolved) return { ok: false, reason: "invalid" };
   const { context, response } = resolved;
   if (response?.status === "submitted") return { ok: false, reason: "submitted" };
   if (resolved.tokenExpired) return { ok: false, reason: "expired" };
+  expectedRevision = confirmedRevision(context.definition, response, expectedRevision, unconfirmed);
   if ((response?.draftRevision ?? 0) !== expectedRevision) return { ok: false, reason: "stale" };
 
   const evaluated = evaluateAnswers(context.definition, input, "draft");
@@ -242,7 +255,7 @@ export type SubmitResult =
  * A retry with the same key and answers, or an identical resubmission,
  * returns the original result. Different answers after submission are rejected.
  */
-export async function submitResponse(tx: Tx, token: string, requestKey: string, input: unknown, now = new Date(), expectedRevision?: number): Promise<SubmitResult> {
+export async function submitResponse(tx: Tx, token: string, requestKey: string, input: unknown, now = new Date(), expectedRevision?: number, unconfirmed?: unknown): Promise<SubmitResult> {
   const resolved = await resolve(tx, token, now, true);
   if (!resolved) return { ok: false, reason: "invalid" };
   const { context, response } = resolved;
@@ -260,7 +273,7 @@ export async function submitResponse(tx: Tx, token: string, requestKey: string, 
   }
   if (resolved.tokenExpired) return { ok: false, reason: "expired" };
   // A tab that missed a newer autosave (another window) reloads before submitting older answers (PDF 04, transaction 3).
-  if (expectedRevision !== undefined && response && response.draftRevision > expectedRevision) return { ok: false, reason: "stale" };
+  if (expectedRevision !== undefined && response && response.draftRevision > confirmedRevision(context.definition, response, expectedRevision, unconfirmed)) return { ok: false, reason: "stale" };
   if (!evaluated.ok) return { ok: false, reason: "invalid", errors: evaluated.errors };
 
   // First committed submission for the visit is the counted one (SR-19).

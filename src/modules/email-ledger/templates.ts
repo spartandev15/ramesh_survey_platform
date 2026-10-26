@@ -1,3 +1,4 @@
+import { textOn } from "@/lib/contrast";
 import type { SendKind } from "@/modules/shops/settings-policy";
 
 /**
@@ -63,10 +64,10 @@ export function renderEmail(c: EmailContext): { subject: string; text: string; h
   const p = (t: string) => `<p style="margin:0 0 16px;line-height:1.5">${escapeHtml(t)}</p>`;
   const html = `<!doctype html><html><body style="margin:0;background:#f5f6f8;font-family:Arial,Helvetica,sans-serif;color:#111827">
 <div style="max-width:560px;margin:0 auto;padding:24px 16px">
-<div style="background:${color};color:#ffffff;padding:16px 20px;border-radius:8px 8px 0 0;font-size:18px;font-weight:bold">${escapeHtml(c.shopName)}</div>
+<div style="background:${color};color:${textOn(color)};padding:16px 20px;border-radius:8px 8px 0 0;font-size:18px;font-weight:bold">${escapeHtml(c.shopName)}</div>
 <div style="background:#ffffff;padding:24px 20px;border-radius:0 0 8px 8px">
 ${c.isTest ? p("TEST EMAIL: internal testing only.") : ""}${p(greeting)}${body.paragraphs.map(p).join("")}
-<p style="margin:24px 0"><a href="${escapeHtml(c.surveyUrl)}" style="background:${color};color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">${escapeHtml(body.action)}</a></p>
+<p style="margin:24px 0"><a href="${escapeHtml(c.surveyUrl)}" style="background:${color};color:${textOn(color)};padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">${escapeHtml(body.action)}</a></p>
 ${p(body.closing)}
 </div>
 <p style="font-size:12px;color:#6b7280;line-height:1.5;margin:16px 4px">If you would rather not get survey emails from ${escapeHtml(c.shopName)}, <a href="${escapeHtml(c.optOutUrl)}" style="color:#6b7280">opt out here</a>.</p>
@@ -89,13 +90,13 @@ export function renderAlertEmail(c: { isTest: boolean; shopName: string; brandCo
   const p = (t: string) => `<p style="margin:0 0 16px;line-height:1.5">${escapeHtml(t)}</p>`;
   const html = `<!doctype html><html><body style="margin:0;background:#f5f6f8;font-family:Arial,Helvetica,sans-serif;color:#111827">
 <div style="max-width:560px;margin:0 auto;padding:24px 16px">
-<div style="background:${color};color:#ffffff;padding:16px 20px;border-radius:8px 8px 0 0;font-size:18px;font-weight:bold">${escapeHtml(c.shopName)}</div>
+<div style="background:${color};color:${textOn(color)};padding:16px 20px;border-radius:8px 8px 0 0;font-size:18px;font-weight:bold">${escapeHtml(c.shopName)}</div>
 <div style="background:#ffffff;padding:24px 20px;border-radius:0 0 8px 8px">
 ${c.isTest ? p("TEST EMAIL: internal testing only.") : ""}${p(intro)}
 <p style="margin:0 0 8px;font-weight:bold">What needs attention</p>
 <ul style="margin:0 0 16px;padding-left:20px;line-height:1.5">${c.alerts.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ul>
 ${p(next)}
-<p style="margin:24px 0"><a href="${escapeHtml(c.detailUrl)}" style="background:${color};color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Open the response</a></p>
+<p style="margin:24px 0"><a href="${escapeHtml(c.detailUrl)}" style="background:${color};color:${textOn(color)};padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Open the response</a></p>
 </div></div></body></html>`;
   return { subject, text, html };
 }

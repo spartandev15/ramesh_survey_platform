@@ -222,6 +222,7 @@ export function DashboardView({
       <p className="text-sm text-gray-600">
         {DATE_BASIS_LABELS[filters.basis]} from {filters.from} to {filters.to}, {SOURCE_FILTER_LABELS[filters.source].toLowerCase()}, {versionLabel}. Dates use the shop&apos;s local time.
         {filters.basis === "delivered" && " Responses not yet matched to a visit have no delivery date, so they are not in this view."}
+        {data.truncated && <span className="font-medium text-amber-800"> This range has more than 20,000 responses: only the newest 20,000 are counted. Choose shorter dates for exact figures.</span>}
         {answerLabel && (
           <>
             {" "}

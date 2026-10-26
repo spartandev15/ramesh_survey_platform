@@ -7,11 +7,11 @@ import { openShop, signInAs, TEST_SHOP, unique } from "./helpers";
  * from the emailed link (read from the database, as email is only logged
  * locally) and signs in. Returns the shop id and the signed-in shop page.
  */
-export async function createShopUser(page: Page, browser: Browser): Promise<{ shopId: string; shopPage: Page; close: () => Promise<void> }> {
+export async function createShopUser(page: Page, browser: Browser, shopName = TEST_SHOP.name): Promise<{ shopId: string; shopPage: Page; close: () => Promise<void> }> {
   const id = unique();
   const email = `shop-user-${id}@e2e.example`;
   const password = `Shop-user-${id}-pass`;
-  await openShop(page, TEST_SHOP.name);
+  await openShop(page, shopName);
   await page.waitForURL(/\/psg\/shops\/[0-9a-f-]{36}$/);
   const shopId = page.url().split("/psg/shops/")[1];
   await page.getByLabel("Name", { exact: true }).fill("E2E Shop User");

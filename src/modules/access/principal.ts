@@ -1,9 +1,9 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
 import { cache } from "react";
 import { getDb } from "@/db/client";
-import { psgStaffRole, shopMembership } from "@/db/schema";
+import { psgStaffRole, shop, shopMembership } from "@/db/schema";
 import { getAuth } from "@/modules/auth/auth";
 import { canReadShop, hasCapability, type Capability, type Principal } from "./capabilities";
 import { ForbiddenError, NotFoundError, UnauthenticatedError } from "./errors";
@@ -16,12 +16,19 @@ export interface CurrentUser {
   email: string;
 }
 
-/** Roles and memberships are always read from the database, never from the client. */
+/**
+ * Roles and memberships are always read from the database, never from the client.
+ * A deleted (archived) shop is no longer one of its users' shops, so every shop page and action is closed to them.
+ */
 async function loadPrincipal(userId: string): Promise<Principal> {
   const db = getDb();
   const [roles, memberships] = await Promise.all([
     db.select({ role: psgStaffRole.role }).from(psgStaffRole).where(eq(psgStaffRole.userId, userId)),
-    db.select({ shopId: shopMembership.shopId }).from(shopMembership).where(eq(shopMembership.userId, userId)),
+    db
+      .select({ shopId: shopMembership.shopId })
+      .from(shopMembership)
+      .innerJoin(shop, eq(shop.id, shopMembership.shopId))
+      .where(and(eq(shopMembership.userId, userId), isNull(shop.archivedAt))),
   ]);
   return {
     userId,

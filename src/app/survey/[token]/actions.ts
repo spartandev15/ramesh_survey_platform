@@ -12,10 +12,10 @@ export type DraftSaveResult =
   | { ok: true; revision: number; savedAt: string }
   | { ok: false; reason: "invalid" | "expired" | "submitted" | "stale" | "rate_limited"; errors?: AnswerError[] };
 
-export async function saveDraftAction(input: { token: string; expectedRevision: number; answers: Answers }): Promise<DraftSaveResult> {
+export async function saveDraftAction(input: { token: string; expectedRevision: number; answers: Answers; unconfirmed?: Answers }): Promise<DraftSaveResult> {
   const address = clientAddress(await headers());
   try {
-    const result = await saveSurveyDraft(input.token, address, input.expectedRevision, input.answers);
+    const result = await saveSurveyDraft(input.token, address, input.expectedRevision, input.answers, input.unconfirmed);
     if (!result.ok) return { ok: false, reason: result.reason, errors: result.errors };
     return { ok: true, revision: result.revision, savedAt: result.savedAt.toISOString() };
   } catch (error) {
@@ -29,10 +29,10 @@ export type SubmitActionResult =
   | { ok: false; reason: "invalid" | "expired" | "already_submitted" | "stale" | "rate_limited"; errors?: AnswerError[] };
 
 /** Scores and alerts are computed on the server and never returned to the respondent. */
-export async function submitAction(input: { token: string; requestKey: string; expectedRevision: number; answers: Answers }): Promise<SubmitActionResult> {
+export async function submitAction(input: { token: string; requestKey: string; expectedRevision: number; answers: Answers; unconfirmed?: Answers }): Promise<SubmitActionResult> {
   const address = clientAddress(await headers());
   try {
-    const result = await submitSurvey(input.token, address, input.requestKey, input.answers, input.expectedRevision);
+    const result = await submitSurvey(input.token, address, input.requestKey, input.answers, input.expectedRevision, input.unconfirmed);
     if (!result.ok) return { ok: false, reason: result.reason, errors: result.errors };
     return { ok: true, submittedAt: result.submittedAt.toISOString() };
   } catch (error) {

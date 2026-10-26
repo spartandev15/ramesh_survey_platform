@@ -33,15 +33,16 @@ export async function openSurvey(token: string, address: string): Promise<store.
   return getDb().transaction((tx) => store.getTokenState(tx, token));
 }
 
-export async function saveSurveyDraft(token: string, address: string, expectedRevision: number, answers: unknown): Promise<store.SaveResult> {
+/** `unconfirmed`: the answers of this tab's last save whose reply never arrived, if any. */
+export async function saveSurveyDraft(token: string, address: string, expectedRevision: number, answers: unknown, unconfirmed?: unknown): Promise<store.SaveResult> {
   // Autosave fires often while typing; the limits allow normal use and stop floods.
   await limit("save", address, token, 240, 120);
   if (!isWellFormedToken(token)) return { ok: false, reason: "invalid" };
-  return getDb().transaction((tx) => store.saveDraft(tx, token, expectedRevision, answers));
+  return getDb().transaction((tx) => store.saveDraft(tx, token, expectedRevision, answers, new Date(), unconfirmed));
 }
 
-export async function submitSurvey(token: string, address: string, requestKey: string, answers: unknown, expectedRevision: number): Promise<store.SubmitResult> {
+export async function submitSurvey(token: string, address: string, requestKey: string, answers: unknown, expectedRevision: number, unconfirmed?: unknown): Promise<store.SubmitResult> {
   await limit("submit", address, token, 30, 10);
   if (!isWellFormedToken(token) || !/^[A-Za-z0-9-]{8,64}$/.test(requestKey) || !Number.isInteger(expectedRevision) || expectedRevision < 0) return { ok: false, reason: "invalid" };
-  return getDb().transaction((tx) => store.submitResponse(tx, token, requestKey, answers, new Date(), expectedRevision));
+  return getDb().transaction((tx) => store.submitResponse(tx, token, requestKey, answers, new Date(), expectedRevision, unconfirmed));
 }

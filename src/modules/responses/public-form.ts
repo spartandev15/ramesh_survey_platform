@@ -23,10 +23,12 @@ export async function loadPublicForm(slug: string) {
 }
 
 export async function submitPublicForm(address: string, input: { slug: string; versionId: string; additionVersionId: string | null; answers: unknown; context: unknown; requestKey: string }) {
-  const allowed = (await consumeRateLimit(`survey:public:ip:${address}`, 10, 60)) && (await consumeRateLimit(`survey:public:shop:${input.slug}`, 300, 60));
-  if (!allowed) throw new PublicFormRateLimitedError();
+  if (!(await consumeRateLimit(`survey:public:ip:${address}`, 10, 60))) throw new PublicFormRateLimitedError();
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const validAddition = input.additionVersionId === null || (typeof input.additionVersionId === "string" && uuid.test(input.additionVersionId));
-  if (!SLUG_RE.test(input.slug) || !uuid.test(input.versionId) || !validAddition || !/^[A-Za-z0-9-]{8,64}$/.test(input.requestKey)) return { ok: false as const, reason: "unavailable" as const };
+  const valid = typeof input.slug === "string" && input.slug.length <= 60 && SLUG_RE.test(input.slug) && uuid.test(input.versionId) && validAddition && /^[A-Za-z0-9-]{8,64}$/.test(input.requestKey);
+  if (!valid) return { ok: false as const, reason: "unavailable" as const };
+  // The slug goes into the per-shop limit key only once it is known to be well formed.
+  if (!(await consumeRateLimit(`survey:public:shop:${input.slug}`, 300, 60))) throw new PublicFormRateLimitedError();
   return getDb().transaction((tx) => store.submitPublic(tx, input));
 }

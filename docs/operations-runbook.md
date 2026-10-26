@@ -10,7 +10,7 @@ How to run PSG Hub Surveys in production and what PSG operations does each day. 
 | Worker | `npm run worker` locally; `node dist/worker.mjs` in production (one bundled file from `npm run build:server`; about 70 MB of memory) | Sends survey and alert emails, schedules reminders, runs the FileMaker bridge when it is switched on, sends operations notices |
 | Migrations | `npm run db:migrate` locally; `node dist/migrate.mjs` in the image | Applies the SQL in `drizzle/` in order; run before starting a new release |
 
-Run exactly one or more workers next to the web app. Several workers are safe: every send is claimed with a lease, and notices and the daily report are sent once. **Restart the worker after every deploy**: it does not reload code.
+Run at least one worker next to the web app. Several workers are safe: every send is claimed with a lease, and notices and the daily report are sent once. **Restart the worker after every deploy**: it does not reload code. `docker-compose.yml` restarts the database, web app and worker by themselves after a crash or a reboot (`restart: unless-stopped`); without Docker, run them as services that do the same (for example systemd with `Restart=always`).
 
 ## 2. Configuration
 
@@ -36,7 +36,7 @@ In production, survey links are removed from logs automatically.
 
 - **Uptime monitor:** point it at `GET /api/health` every minute. It answers `200 {"status":"ok"}`, or `503` when the database is unreachable or the worker has not beaten for five minutes. A stopped worker cannot email about itself, so this is the only alarm for that case.
 - **Queue-health email (every 5 minutes):** sent to `OPS_ALERT_EMAILS` when survey emails have been due for 15 minutes or more, when five or more emails fail, bounce or end unknown within 15 minutes, or when a FileMaker bridge record fails or conflicts. It repeats hourly while the problem lasts and sends one "Resolved" email when it clears.
-- **Daily counts email (after 07:00 New York time):** yesterday's imports, invitations, emails accepted by kind, responses by source and alerts raised, and everything waiting for a person, with the screen to use. Compare it with the import files and SendGrid's own statistics.
+- **Daily counts email (first run after 07:00 New York time):** the last 24 hours of imports, invitations, emails accepted by kind, responses by source and alerts raised, and everything waiting for a person, with the screen to use. Compare it with the import files and SendGrid's own statistics.
 - **Overview page (`/psg`):** the same health at a glance: email queue, worker heartbeat, bridge.
 
 Thresholds are the package's proposals; PSG confirms the real ones at kickoff (see [open-items.md](open-items.md)).
@@ -65,13 +65,16 @@ Work top to bottom. Every list is paged; test data is hidden unless you ask for 
 
 Confirm each line and keep the answers with the release note ([release-notes.md](release-notes.md)).
 
-1. Migrations applied to the production database (`npm run db:migrate`); the previous build is kept for rollback (section 6).
-2. Automated backups with point-in-time recovery are on, and a restore drill has passed on a copy (section 7).
-3. Sender domain authenticated in SendGrid (SPF, DKIM, DMARC); `EMAIL_PROVIDER=sendgrid`; `SENDGRID_WEBHOOK_PUBLIC_KEY` set and the SendGrid Event Webhook pointed at `/api/survey-mail/events` with signing on.
-4. The worker runs as a service that restarts by itself; `/api/health` answers 200 and an uptime monitor watches it; `OPS_ALERT_EMAILS` set.
-5. **Test recipients** holds only internal addresses.
-6. Named people are on the roster below, with a backup each, and can open **Operator queues**.
-7. **Internal production smoke test**, on an internal test shop, never a customer: import one visit to an allowlisted address, receive the email, answer with a low rating, see the result on the shop dashboard, approve the alert and receive it, and see both emails as *Delivered* in **Email review**. Then check the daily counts email the next morning.
+1. The exact commit being released is recorded, and its migration and sign-in changes were reviewed by the people PSG names for that (PDF 09).
+2. Migrations applied to the production database (`node dist/migrate.mjs`, or `npm run db:migrate` from a checkout); the previous build is kept for rollback (section 6).
+3. Backups meet the agreed recovery point (section 7) and a restore drill has passed on a copy.
+4. Sender domain authenticated in SendGrid (SPF, DKIM, DMARC); `EMAIL_PROVIDER=sendgrid`; `SENDGRID_WEBHOOK_PUBLIC_KEY` set and the SendGrid Event Webhook pointed at `/api/survey-mail/events` with signing on. With `EMAIL_PROVIDER=log` nothing reaches customers or staff, and password-reset links cannot be delivered.
+5. The web app and worker run as services that restart by themselves; `/api/health` answers 200 and an uptime monitor watches it; `OPS_ALERT_EMAILS` set.
+6. **Test recipients** holds only internal addresses.
+7. Named people are on the roster below, with a backup each, can open **Operator queues** and have been shown the daily loop (section 4).
+8. **Launch readiness** reviewed for every shop, and its CSV export kept with the release record.
+9. **Internal production smoke test**, on an internal test shop, never a customer: import one visit to an allowlisted address, receive the email, answer with a low rating, see the result on the shop dashboard, approve the alert and receive it. Check the alert's delivery on its case page and that **Email review** and **Operator queues** show nothing stuck. Then check the daily counts email the next morning.
+10. The release record (commit, checks above, readiness export, contacts) is delivered to PSG.
 
 ## 5b. Owners and escalation
 
@@ -96,20 +99,22 @@ For open follow-up cases from the old system (SR-46; owner until handoff: G-12).
 2. **Imports → Legacy follow-up cases**: upload it, check the preview (closed cases are kept for reference only; a repeated case ID is refused) and commit. Nothing is emailed.
 3. Agree the handoff time with the legacy owner. Until then the legacy owner keeps working the case; a re-import updates it and never creates a second one.
 4. **Legacy cases** (`/psg/legacy-cases`): take each case over with a note at the agreed time. After handoff, only Hub works it and re-imports leave it unchanged, so there is no duplicate outreach.
-5. Reconcile: the number of open cases in the legacy system at handoff equals the cases Hub took over plus those still with the legacy owner. The operator responsible records acceptance in the case notes.
+5. Reconcile: the number of open cases in the legacy system at handoff equals the cases Hub took over plus those still with the legacy owner. The operator responsible records acceptance in the handoff note and, after handoff, in the case notes (notes are refused before handoff).
 
 ## 6. Pause and rollback
 
-- A delivery problem: set the affected shop to **Paused**. Nothing new is sent; customers who already have a link can still finish.
+- A delivery problem at one shop: set it to **Paused**. Invitations and reminders stop; link renewals a customer asks for and alert emails PSG approves still go out, and customers who already have a link can still finish.
+- A problem with sending itself (every shop): stop the worker. Nothing is sent while it is stopped; queued emails wait and go out when it starts again, so review **Email review** first. `/api/health` reports the stopped worker.
+- Tell affected shops through the owner PSG names for incidents (roster below) whenever surveys or alerts are interrupted.
 - Do not delete records, reset invitations or resend mail to recover. Reconcile every acceptance-unknown email in **Email review** before resuming.
 - A software rollback keeps the database as it is (all migrations are additive) and restarts web and worker on the previous build.
 - Returning to Alchemer or FileMaker invitations is not automatic; it needs a reconciled visit ledger and an explicit decision.
 
 ## 7. Backup and restore
 
-- Take automated PostgreSQL backups with point-in-time recovery (proposed RPO 15 minutes, RTO 4 hours; PSG to confirm).
-- On a single server without a managed database, `deploy/backup.sh` takes a daily `pg_dump` from cron and keeps 14 days; copy the folder off the server as well.
-- Put `deploy/nginx.conf` in front of the app: HTTPS, and it overwrites `X-Forwarded-For` so rate limits see the real client address.
+- The package proposes a recovery point of 15 minutes and a recovery time of 4 hours (PSG to confirm). Only point-in-time recovery meets that: use a managed PostgreSQL with it switched on, or set up WAL archiving on your own server.
+- `deploy/backup.sh` (a daily `pg_dump` from cron, 14 days kept) is a fallback, not the target: it can lose up to a day of answers, which PSG has to accept in writing if it is the only backup. It writes files only its user can read; keep `DATABASE_URL` in a `chmod 600` file (`BACKUP_ENV_FILE`), never on the cron line. Copy the folder off the server, encrypted, as well.
+- Put `deploy/nginx.conf` in front of the app: HTTPS, it overwrites `X-Forwarded-For` so rate limits see the real client address, and its access log leaves out survey and password-reset tokens.
 - Prove a restore regularly: an administrator creates an empty database once (`createdb -U postgres -O psg psg_survey_drill`), then run `DRILL_DATABASE_URL=... npm run restore-drill`. It backs up the live database, restores the copy into the drill database, checks that key table counts match and that the data guards (append-only history, locked answers) came back, and prints the backup and restore times. It never writes to the live database.
 - After a restore, start the worker last and review **Email review** before it sends anything.
 

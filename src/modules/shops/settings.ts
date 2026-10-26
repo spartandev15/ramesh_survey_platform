@@ -1,5 +1,7 @@
 import "server-only";
-import { getDb } from "@/db/client";
+import { eq } from "drizzle-orm";
+import { getDb, type Tx } from "@/db/client";
+import { shopSurveySettings } from "@/db/schema";
 import { requireCapability } from "@/modules/access/principal";
 import { listShopAdditionVersions } from "@/modules/instruments/store";
 import { listUnsent, type QueueRow } from "@/modules/invitations/store";
@@ -83,16 +85,22 @@ export async function changeShopMode(shopId: string, expectedRevision: number, t
   const { principal } = await requireCapability("shop.manage");
   requireId(shopId);
   return getDb().transaction(async (tx) => {
-    // The first switch to Live needs the whole launch checklist, acceptance last (SR-37). Resuming a paused shop does not.
-    if (target === "live") {
-      const view = await store.getSettings(tx, shopId);
-      if (view && !view.settings.activatedAt) {
-        const blockers = await launchBlockers(tx, shopId);
-        if (blockers.length > 0) throw new store.ShopSettingsError("invalid", "The shop cannot switch to Live until its launch checklist is complete.", blockers);
-      }
-    }
+    await requireLaunchReady(tx, shopId, target);
     return store.changeMode(tx, { type: "user", userId: principal.userId }, shopId, expectedRevision, target);
   });
+}
+
+/**
+ * The first switch to Live needs the whole launch checklist, acceptance last (SR-37). Resuming a paused
+ * shop does not. The settings row is locked first, so a check recorded or withdrawn at the same moment
+ * cannot slip between this check and the switch.
+ */
+export async function requireLaunchReady(tx: Tx, shopId: string, target: ShopMode) {
+  if (target !== "live") return;
+  const [locked] = await tx.select({ activatedAt: shopSurveySettings.activatedAt }).from(shopSurveySettings).where(eq(shopSurveySettings.shopId, shopId)).for("update");
+  if (!locked || locked.activatedAt) return;
+  const blockers = await launchBlockers(tx, shopId);
+  if (blockers.length > 0) throw new store.ShopSettingsError("invalid", "The shop cannot switch to Live until its launch checklist is complete.", blockers);
 }
 
 export async function setShopLegacyCoverage(shopId: string, expectedRevision: number, confirmed: boolean) {

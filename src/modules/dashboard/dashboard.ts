@@ -89,6 +89,7 @@ export async function getDashboard(shopId: string, filters: DashboardFilters, pa
       filters,
       today: localDate(new Date(), shop.timezone),
       summary,
+      truncated: rows.truncated,
       questions,
       questionsVersion: main ? { id: main.versionId, label: main.label } : null,
       answerOptions,

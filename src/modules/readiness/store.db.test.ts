@@ -69,6 +69,23 @@ describe.skipIf(!process.env.DATABASE_URL)("launch readiness manifest", async ()
     await getPool().end();
   });
 
+  it("refuses the first switch to Live while the checklist is open, but not a resume (SR-37)", () =>
+    inRollback(async (tx) => {
+      const { requireLaunchReady } = await import("@/modules/shops/settings");
+      const { ShopSettingsError } = settings;
+      const s = await newShop(tx);
+      await configure(tx, s.id);
+      // Nothing is recorded yet (and acceptance is last), so the first Live switch is refused with the reasons.
+      const refused = await requireLaunchReady(tx, s.id, "live").catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(ShopSettingsError);
+      expect((refused as InstanceType<typeof ShopSettingsError>).issues.some((b) => b.startsWith("Launch checklist:"))).toBe(true);
+      // Other targets are never gated.
+      await expect(requireLaunchReady(tx, s.id, "paused")).resolves.toBeUndefined();
+      // A shop that was Live before (now paused) resumes without the checklist.
+      await tx.update(shopSurveySettings).set({ activatedAt: new Date() }).where(eq(shopSurveySettings.shopId, s.id));
+      await expect(requireLaunchReady(tx, s.id, "live")).resolves.toBeUndefined();
+    }));
+
   it("covers every in-scope shop and lists internal test shops apart (AT-37)", () =>
     inRollback(async (tx) => {
       const real = await newShop(tx);

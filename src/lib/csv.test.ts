@@ -8,6 +8,8 @@ describe("CSV export safety (AT-40)", () => {
     expect(csvCell("plain")).toBe('"plain"');
     expect(csvCell(null)).toBe('""');
     expect(csvCell(3.5)).toBe('"3.5"');
+    // A negative score is a number, not a formula: spreadsheets must read it as -20.
+    expect(csvCell(-20)).toBe('"-20"');
   });
 
   it("writes a UTF-8 CSV with CRLF rows", () => {

@@ -2,6 +2,36 @@
 
 Each delivery with its commit, what changed, how it was verified and what is still open. Requirement status is in [traceability.md](traceability.md); open gates and proposals are in [open-items.md](open-items.md).
 
+## 2026-10-26: full audit fixes, dashboard question results, Copy a survey
+
+**Branch:** `main` · **Previous delivery:** `7848df4` (2026-09-29). In between: `5d9ce14` (09-30, migrations 0030 and 0031), the 10-23 deliveries (page tours, working top-bar search and notification bell, bundled worker and scripts, backup and reverse-proxy files, Next.js 16.4.2 for security advisories) and the 10-26 deliveries below.
+
+A second line-by-line audit of the package (SR-01 to SR-48, 04, 07, 09) and a separate security review were run against the code. Nothing release-blocking was found in the code; the fixes below close what was found on our side.
+
+**Added**
+
+- Dashboard **Question results**: how customers answered each question of the version the scores show. Clicking an answer, or the new *Answer* filter, narrows the whole page, the list and the CSV export (`report_answer` column), so the export still matches the screen (AT-31).
+- **Copy a survey** in the *Create new survey* box: a draft copy of any version of any survey.
+
+**Fixed**
+
+- Correcting one visit's email no longer changes the email on the same customer's other visits (their reminders kept going to the old address's replacement).
+- A survey save whose reply was lost (a dropped phone connection) no longer forces the customer to reload and lose newer answers (SR-16).
+- Users of a deleted (archived) shop can no longer open its dashboard, follow-up cases or notifications.
+- Text on a shop's brand colour (survey header and emails) now always meets WCAG AA contrast (SR-02, SR-39).
+- The PSG dashboard shop picker showed no name when the address had no shop in it.
+- Negative numbers in CSV exports stay numbers (they were written as text).
+- The dashboard says so when a range has more than 20,000 responses instead of silently counting the newest 20,000.
+- The first switch to Live locks the shop's settings before checking the launch checklist, and the gate now has a test.
+- Security: production logs no longer contain password-reset links or recipient addresses; backups are readable only by their owner and the database address stays off the command line; the nginx access log leaves out survey and reset tokens; `docker-compose.yml` restarts the database, web app and worker by themselves and has no default database password; the public form checks its input before using it in a rate-limit key.
+- zod 4.6.7 (high-severity advisory); one redundant database index removed.
+
+**Migrations:** `0032_drop_redundant_legacy_case_index` (drops `legacy_case_shop_idx`; the unique identity index already starts with `shop_id`). No data changes.
+
+**Verification (2026-10-26, Windows PC, PostgreSQL 17, production build):** lint and typecheck clean; 345 of 345 unit and database tests; `next build` and `npm run build:server`; browser suite 24 of 24 (22 in the full run; the other 2 crashed the browser on this 8 GB PC and passed when rerun on their own); security headers and unauthenticated access checked on the running build.
+
+**Not verified here:** the nginx configuration (no nginx on the development PC: run `nginx -t` on the server), the restore drill, a load test on the production host, and anything behind the open gates in open-items.md.
+
 ## 2026-09-29: package cross-check fixes
 
 **Branch:** `main` · **Previous delivery:** `7848df4`

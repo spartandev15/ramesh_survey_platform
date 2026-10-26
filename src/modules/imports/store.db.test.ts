@@ -224,6 +224,25 @@ describe.skipIf(!process.env.DATABASE_URL)("imports and invitations", async () =
       expect(stale.ok).toBe(false);
     }));
 
+  it("correcting one visit's email leaves the customer's other visits alone (SR-11)", () =>
+    inRollback(async (tx) => {
+      const { shop: s } = await productionShop(tx);
+      // Two repairs for one customer: the import reuses one customer row for the same email.
+      await importCsv(tx, s.id, csv("6101,Jo,Lee,jo@example.com,2026-10-02", "6102,Jo,Lee,jo@example.com,2026-10-03"));
+      const queue = await invitations.listQueue(tx, s.id);
+      const first = queue.find((r) => r.sourceVisitKey === "6101")!;
+      const second = queue.find((r) => r.sourceVisitKey === "6102")!;
+      await invitations.correctInvitation(tx, actor, s.id, second.id, second.revision, { email: "jo.new@example.com", deliveredOn: "2026-10-03" });
+
+      const after = await invitations.listQueue(tx, s.id);
+      expect(after.find((r) => r.id === first.id)?.email).toBe("jo@example.com");
+      expect(after.find((r) => r.id === second.id)?.email).toBe("jo.new@example.com");
+      // A visit with a customer of its own is corrected in place.
+      const again = after.find((r) => r.id === second.id)!;
+      await invitations.correctInvitation(tx, actor, s.id, second.id, again.revision, { email: "jo.final@example.com", deliveredOn: "2026-10-03" });
+      expect((await invitations.listQueue(tx, s.id)).find((r) => r.id === second.id)?.email).toBe("jo.final@example.com");
+    }));
+
   it("refuses an explicit send to a recipient who opted out at this shop only (SR-25)", () =>
     inRollback(async (tx) => {
       const a = await productionShop(tx);

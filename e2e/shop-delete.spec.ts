@@ -6,15 +6,22 @@
  */
 import { expect, test } from "@playwright/test";
 import { adminCredentials, createShop, findOnPages, signIn, unique } from "./helpers";
+import { createShopUser } from "./shop-user";
 
-test.skip(!adminCredentials(), "Set E2E_EMAIL and E2E_PASSWORD to run browser tests");
+test.skip(!adminCredentials() || !process.env.DATABASE_URL, "Set E2E_EMAIL, E2E_PASSWORD and DATABASE_URL to run browser tests");
 
-test("PSG sees a shop's public link and QR code in popups, then deletes the shop after confirming", async ({ page }) => {
+test("PSG sees a shop's public link and QR code in popups, then deletes the shop after confirming", async ({ page, browser }) => {
+  test.setTimeout(180_000);
   await signIn(page);
   const id = unique();
   const name = `E2E Delete ${id}`;
   await createShop(page, { name, slug: `e2e-delete-${id}` });
   const shopUrl = page.url();
+  // A user of this shop, to check that deleting the shop closes it to them.
+  const shopUser = await createShopUser(page, browser, name);
+  await shopUser.shopPage.goto(`/shop/${shopUser.shopId}/cases`);
+  await expect(shopUser.shopPage.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.goto(shopUrl);
 
   // Public link popup, with the full address.
   await page.getByRole("button", { name: "Link", exact: true }).click();
@@ -63,4 +70,11 @@ test("PSG sees a shop's public link and QR code in popups, then deletes the shop
   expect(await findOnPages(page, page.getByRole("link", { name, exact: true }))).toBe(false);
   expect((await page.goto(shopUrl))?.status()).toBe(404);
   expect((await page.request.get(`${shopUrl}/qr`)).status()).toBe(404);
+  // Its users lose the shop too: dashboard, follow-up cases and notifications.
+  for (const path of [`/shop/${shopUser.shopId}`, `/shop/${shopUser.shopId}/cases`]) {
+    await shopUser.shopPage.goto(path);
+    await expect(shopUser.shopPage.getByText(/not found|could not be found/i).first()).toBeVisible();
+  }
+  expect((await shopUser.shopPage.request.get(`/api/notifications?shop=${shopUser.shopId}`)).ok()).toBe(false);
+  await shopUser.close();
 });

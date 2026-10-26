@@ -101,6 +101,27 @@ describe.skipIf(!process.env.DATABASE_URL)("respondent survey lifecycle", async 
       expect(await store.submitResponse(tx, token, "key-fresh-01", complete, new Date(), 2)).toMatchObject({ ok: true, replayed: false });
     }));
 
+  it("keeps saving after a save whose reply was lost, without a reload (SR-16, AT-16)", () =>
+    inRollback(async (tx) => {
+      const { token } = await setup(tx);
+      // The tab sent revision 0 -> 1; it committed, but the reply never arrived, so the tab still holds revision 0.
+      const lost = { overall_rating: 4 };
+      expect(await store.saveDraft(tx, token, 0, lost)).toMatchObject({ ok: true, revision: 1 });
+
+      // Its next save names the unconfirmed answers: they are what the server holds, so the save goes through.
+      expect(await store.saveDraft(tx, token, 0, { overall_rating: 4, ready_on_time: "yes" }, new Date(), lost)).toMatchObject({ ok: true, revision: 2 });
+      expect(await store.getTokenState(tx, token)).toMatchObject({ revision: 2, answers: { overall_rating: 4, ready_on_time: "yes" } });
+
+      // Answers that are not what the server holds still mean another window saved in between.
+      expect(await store.saveDraft(tx, token, 1, { overall_rating: 2 }, new Date(), { overall_rating: 3 })).toEqual({ ok: false, reason: "stale" });
+
+      // Submitting after a lost save works the same way.
+      const second = { overall_rating: 5, ready_on_time: "yes" };
+      expect(await store.saveDraft(tx, token, 2, second)).toMatchObject({ ok: true, revision: 3 });
+      expect(await store.submitResponse(tx, token, "key-lost-reply-1", complete, new Date(), 2, { overall_rating: 1 })).toEqual({ ok: false, reason: "stale" });
+      expect(await store.submitResponse(tx, token, "key-lost-reply-2", complete, new Date(), 2, second)).toMatchObject({ ok: true, replayed: false });
+    }));
+
   it("rejects invalid draft answers instead of storing them", () =>
     inRollback(async (tx) => {
       const { token } = await setup(tx);

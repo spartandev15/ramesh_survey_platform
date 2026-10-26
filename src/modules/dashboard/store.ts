@@ -32,7 +32,10 @@ export async function shopForDashboard(tx: Tx, shopId: string) {
 
 /** Submitted responses for the shop inside the filters, newest first. */
 /** `withAnswers: false` leaves out the answer sets when only scores are needed. An answer filter always loads them. */
-export async function cohortRows(tx: Tx, shopId: string, filters: DashboardFilters, timezone: string, { withAnswers = true } = {}): Promise<DashboardRow[]> {
+/** The most responses one dashboard view reads; a longer range has to be narrowed. */
+const COHORT_LIMIT = 20000;
+
+export async function cohortRows(tx: Tx, shopId: string, filters: DashboardFilters, timezone: string, { withAnswers = true } = {}): Promise<DashboardRow[] & { truncated: boolean }> {
   const answer = filters.answer;
   if (answer) withAnswers = true;
   // A generous UTC window first; the exact shop-local date filter runs in inCohort.
@@ -67,9 +70,9 @@ export async function cohortRows(tx: Tx, shopId: string, filters: DashboardFilte
     ) rev ON true
     WHERE r.shop_id = ${shopId} AND r.status = 'submitted' AND ${window}
     ORDER BY r.submitted_at DESC
-    LIMIT 20000
+    LIMIT ${COHORT_LIMIT}
   `);
-  return result.rows
+  const rows = result.rows
     .map((r) => ({
       id: r.id,
       submittedAt: new Date(r.submitted_at),
@@ -88,6 +91,8 @@ export async function cohortRows(tx: Tx, shopId: string, filters: DashboardFilte
       visitKey: r.visit_key,
     }))
     .filter((r) => inCohort(r, filters, timezone) && (!answer || matchesAnswer(r.answers, answer)));
+  // Hitting the cap means older responses in the range were left out: the page says so instead of showing short counts.
+  return Object.assign(rows, { truncated: result.rows.length === COHORT_LIMIT });
 }
 
 export interface VersionDetail extends VersionInfo {
