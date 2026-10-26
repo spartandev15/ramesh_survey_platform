@@ -26,6 +26,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Node-only packages that must not be bundled into server chunks.
   serverExternalPackages: ["pg", "pg-boss", "pino"],
+  // The only images are two small brand PNGs (27 KB together): serve them as they are. No optimizer means no
+  // native image library in the bundle, so a build made on one platform runs on another (shared Linux hosting).
+  images: { unoptimized: true },
   poweredByHeader: false,
   experimental: {
     // Import files are capped at 5 MB in the app; this leaves room for form overhead.

@@ -12,6 +12,18 @@ How to run PSG Hub Surveys in production and what PSG operations does each day. 
 
 Run at least one worker next to the web app. Several workers are safe: every send is claimed with a lease, and notices and the daily report are sent once. **Restart the worker after every deploy**: it does not reload code. `docker-compose.yml` restarts the database, web app and worker by themselves after a crash or a reboot (`restart: unless-stopped`); without Docker, run them as services that do the same (for example systemd with `Restart=always`).
 
+### 1a. Shared cPanel hosting (CloudLinux "Setup Node.js App")
+
+Used for the test deployment at `survey.spartanbots.xyz` (Namecheap shared hosting). A VPS with Docker remains the recommended production setup.
+
+- **Database:** the host's own PostgreSQL is too old (10; the app needs 13 or later), so the database is an external PostgreSQL (Supabase, *Session pooler* address, port 5432). Shared hosts block outgoing database ports by default: ask the host to open outbound TCP 5432. Use verified TLS: download the provider's CA file next to the app and end `DATABASE_URL` with `?sslmode=verify-full&sslrootcert=/full/path/to/ca.crt`. On Supabase, switch the Data API off and revoke the `anon` and `authenticated` roles' rights on the app's tables (Supabase grants them by default).
+- **Files:** build on a development machine (`npm run build`, `npm run build:server`), then copy `.next/standalone` (without its `.env` and without `node_modules/@img` and `node_modules/sharp`), `.next/static`, `public`, `dist/*.mjs`, `drizzle/` and the two files in `deploy/shared-hosting/` into one folder outside the web root, for example `~/psg-survey-app`.
+- **Settings:** write `.env` in that folder with `chmod 600` (generate the secrets on the server). `app.js` loads it before starting the server, so no secret is typed into the control panel.
+- **App:** create the Node.js app (Node 24, application root = that folder, the subdomain, startup file `app.js`, production mode), for example `cloudlinux-selector create --interpreter nodejs --version 24 --app-root psg-survey-app --domain <subdomain> --app-uri / --app-mode production --startup-file app.js`. The selector refuses a folder that already holds `node_modules`: rename it for the create and rename it back afterwards. It writes only a `.htaccess` into the subdomain folder.
+- **Migrations and first admin:** `node --env-file=.env dist/migrate.mjs`, then `node --env-file=.env dist/create-admin.mjs <email> "<name>" > admin-password.txt` with `umask 077`; the admin reads the file once and deletes it.
+- **Worker:** shared hosting may stop long-running processes, so cron runs `worker-keepalive.sh` every minute; it starts the worker only when it is not running. `/api/health` reports a stopped worker.
+- **Update:** upload the new files, run migrations, then `cloudlinux-selector restart --interpreter nodejs --app-root psg-survey-app` and stop the worker (`kill $(cat worker.pid)`) so cron starts the new one.
+
 ## 2. Configuration
 
 All settings are environment variables; `.env.example` lists them.
