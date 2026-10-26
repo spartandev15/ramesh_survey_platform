@@ -90,6 +90,9 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   // 8. The dashboard shows how customers answered each question, and filters to one answer
   const versionPage = page.url();
   await page.goto("/psg/dashboard");
+  // With no shop in the address the picker still names the shop on screen, also after the page script runs.
+  await page.waitForLoadState("networkidle");
+  await expect.poll(() => page.locator("#dashboard-shop").evaluate((e: HTMLSelectElement) => e.selectedIndex)).toBe(0);
   await page.getByLabel("Shop", { exact: true }).selectOption({ label: TEST_SHOP.name });
   await page.waitForURL(/shop=/);
   await page.getByText("Filters", { exact: true }).click();

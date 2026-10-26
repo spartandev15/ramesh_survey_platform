@@ -24,7 +24,12 @@ export function LiveForm({ label, className, children }: { label: string; classN
 
   // Keep the fields in step with the address (Back button, links) unless the user is typing in one.
   useEffect(() => {
-    for (const el of fieldsOf(form.current)) if (el !== document.activeElement) el.value = params.get(el.name) ?? "";
+    for (const el of fieldsOf(form.current)) {
+      if (el === document.activeElement) continue;
+      el.value = params.get(el.name) ?? "";
+      // A select with no such option (no "any" choice, or an id the page replaced) keeps what the server chose instead of going blank.
+      if (el instanceof HTMLSelectElement && el.selectedIndex === -1) for (const option of el.options) option.selected = option.defaultSelected;
+    }
   }, [params]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
