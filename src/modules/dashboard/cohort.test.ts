@@ -32,13 +32,13 @@ describe("categorize (SR-28, SR-31)", () => {
 
 describe("filters", () => {
   it("defaults to the last 90 days by submission and ignores junk", () => {
-    expect(parseFilters({}, "2026-09-27")).toEqual({ from: "2026-06-30", to: "2026-09-27", basis: "submitted", source: "all", version: "all" });
+    expect(parseFilters({}, "2026-09-27")).toEqual({ from: "2026-06-30", to: "2026-09-27", basis: "submitted", source: "all", version: "all", answer: null });
     expect(parseFilters({ from: "nope", source: "fax", version: "1; drop", basis: "x" }, "2026-09-27").source).toBe("all");
     expect(parseFilters({ from: "2026-09-20", to: "2026-09-01" }, "2026-09-27")).toMatchObject({ from: "2026-09-01", to: "2026-09-20" });
   });
 
   it("uses the shop's local date, inclusive at both ends", () => {
-    const f = { from: "2026-09-10", to: "2026-09-10", basis: "submitted" as const, source: "all" as const, version: "all" };
+    const f = { from: "2026-09-10", to: "2026-09-10", basis: "submitted" as const, source: "all" as const, version: "all", answer: null };
     // 02:00 UTC on Sep 11 is still Sep 10 in Chicago.
     expect(inCohort({ ...base, submittedAt: new Date("2026-09-11T02:00:00Z") }, f, "America/Chicago")).toBe(true);
     expect(inCohort({ ...base, submittedAt: new Date("2026-09-11T02:00:00Z") }, f, "UTC")).toBe(false);
@@ -46,7 +46,7 @@ describe("filters", () => {
   });
 
   it("filters by delivery date, source and version; unmatched rows have no delivery date", () => {
-    const f = { from: "2026-09-01", to: "2026-09-30", basis: "delivered" as const, source: "all" as const, version: "all" };
+    const f = { from: "2026-09-01", to: "2026-09-30", basis: "delivered" as const, source: "all" as const, version: "all", answer: null };
     expect(inCohort(base, f, "UTC")).toBe(true);
     expect(inCohort({ ...base, deliveredOn: null }, f, "UTC")).toBe(false);
     expect(inCohort(base, { ...f, source: "paper" }, "UTC")).toBe(false);

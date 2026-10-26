@@ -246,7 +246,7 @@ describe.skipIf(!process.env.DATABASE_URL)("staff and public responses", async (
       expect(full?.suggestions).toEqual([{ shopId: s.id, shopName: "Match Shop", evidence: "Legacy company name 'Match Shop' (source id 1042)" }]);
       expect(full?.response.shopId).toBeNull();
       // The suggested shop sees nothing of it before confirmation: not on its dashboard, not by id.
-      const window = { from: "2000-01-01", to: "2100-01-01", basis: "submitted", source: "all", version: "all" } as const;
+      const window = { from: "2000-01-01", to: "2100-01-01", basis: "submitted", source: "all", version: "all", answer: null } as const;
       expect((await dashboard.cohortRows(tx, s.id, window, "America/Chicago")).some((r) => r.id === orphan.id)).toBe(false);
       expect(await dashboard.shopResponse(tx, s.id, orphan.id, false)).toBeNull();
 

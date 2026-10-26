@@ -56,7 +56,7 @@ export interface Outcomes {
 // Answer normalization
 // ---------------------------------------------------------------------------
 
-function isBlank(value: unknown): boolean {
+export function isBlank(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (typeof value === "string") return value.trim() === "";
   if (Array.isArray(value)) return value.length === 0;

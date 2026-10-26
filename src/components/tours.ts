@@ -7,13 +7,14 @@ const TOP_BAR_STEPS: TourStep[] = [
 ];
 
 const DASHBOARD_STEPS: TourStep[] = [
-  { target: "[data-tour=\"filters\"]", title: "Filters", text: "Choose the date basis, dates, source and survey version. Apply keeps the rest of the page in step." },
+  { target: "[data-tour=\"filters\"]", title: "Filters", text: "Choose the date basis, dates, source, survey version and an answer. Apply keeps the rest of the page in step." },
   { target: "[data-tour=\"range\"]", title: "Quick date ranges", text: "Jump to the last 30 days, 90 days or 12 months." },
   { target: "[data-tour=\"export\"]", title: "Export CSV", text: "Download the responses in this view, with the same filters, as a spreadsheet file." },
   { target: "[data-tour=\"counts\"]", title: "Response counts", text: "Submitted surveys, those counted in scores, those waiting for a customer match, those with negative feedback and partial surveys." },
   { target: "[data-tour=\"volume\"]", title: "Responses over time", text: "Submitted against counted in scores. Hover the chart to see each period." },
   { target: "[data-tour=\"mix\"]", title: "Sources and what counts", text: "Where responses came from, and why some are not in the scores yet." },
   { target: "[data-tour=\"scores\"]", title: "Survey performance", text: "Average score for each measure, with the change against the first half of the period." },
+  { target: "[data-tour=\"questions\"]", title: "Question results", text: "How customers answered each question. Click an answer to see only those customers, everywhere on this page and in the export." },
   { target: "[data-tour=\"versions\"]", title: "Other survey versions", text: "Each survey version is scored on its own. Open one to see its scores." },
   { target: "[data-tour=\"list\"]", title: "Responses", text: "Every response in this view. Use the tabs to show only counted, pending or negative ones, and View to open one." },
   { target: "[data-tour=\"history\"]", title: "Earlier survey history", text: "Results from the earlier survey system, shown on their own scales and never mixed into the scores." },

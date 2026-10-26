@@ -628,8 +628,8 @@ export const legacyCase = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    // Leads with shop_id, so it also serves lookups by shop.
     uniqueIndex("legacy_case_identity_unique").on(t.shopId, t.sourceSystem, t.sourceRef),
-    index("legacy_case_shop_idx").on(t.shopId),
     check("legacy_case_status", sql`${t.legacyStatus} IN ('open', 'closed')`),
     // Only a case still open in the legacy system can be handed off (closed ones are reference only).
     check("legacy_case_handoff_open_only", sql`${t.handedOffAt} IS NULL OR (${t.legacyStatus} = 'open' AND ${t.handedOffBy} IS NOT NULL AND ${t.handoffNote} IS NOT NULL)`),

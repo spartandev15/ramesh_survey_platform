@@ -4,6 +4,8 @@ import { Pagination } from "@/components/pagination";
 import { CATEGORY_LABELS, DATE_BASIS_LABELS, filtersToQuery, SOURCE_FILTER_LABELS, type Category, type DashboardFilters, type Granularity } from "@/modules/dashboard/cohort";
 import { LIST_VIEWS, type getDashboard, type ListView } from "@/modules/dashboard/dashboard";
 import { Donut, Legend, TrendChart } from "./charts";
+import { pct, score } from "./format";
+import { QuestionResults } from "./question-results";
 
 type Data = NonNullable<Awaited<ReturnType<typeof getDashboard>>>;
 
@@ -36,8 +38,6 @@ function bucketLabel(bucket: string): string {
   const [y, m, d] = bucket.split("-").map(Number);
   return d ? `${MONTHS[m - 1]} ${d}` : `${MONTHS[m - 1]} ${y}`;
 }
-const score = (v: number | null) => (v === null ? "No score yet" : String(Number(v.toFixed(2))));
-const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0);
 
 /** Second half of the period against the first, each weighted by its responses; steadier than first bucket against last. */
 function halfChange(points: { value: number; weight: number }[]): { delta: number } | null {
@@ -73,7 +73,7 @@ export function DashboardView({
   responseHref: (id: string) => string;
   exportHref: string;
 }) {
-  const { summary, filters, today, versionOptions, drafts, history, list, listView } = data;
+  const { summary, filters, today, versionOptions, drafts, history, list, listView, questions, questionsVersion, answerOptions, answerLabel } = data;
   // The page says dates use the shop's local time, so the list does too.
   const tz = data.shop.timezone;
   const dayFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: tz });
@@ -81,6 +81,8 @@ export function DashboardView({
   const { counts } = summary;
   const filterQuery = { ...hidden, ...Object.fromEntries(new URLSearchParams(filtersToQuery(filters))) };
   const href = (extra: Record<string, string>) => `${action}?${new URLSearchParams({ ...filterQuery, ...extra })}`;
+  const { answer: currentAnswer, ...withoutAnswer } = filterQuery;
+  const clearAnswerHref = `${action}?${new URLSearchParams(withoutAnswer)}`;
   const versionLabel = filters.version === "all" ? "all survey versions" : (versionOptions.find((v) => v.id === filters.version)?.label ?? "one survey version");
   const notCounted = counts.duplicate + counts.legacy_reference + counts.excluded_test;
   const excluded: [string, number][] = (
@@ -98,7 +100,7 @@ export function DashboardView({
     { label: "90 days", days: 90 },
     { label: "12 months", days: 365 },
   ].map((p) => ({ ...p, from: new Date(Date.parse(`${today}T00:00:00Z`) - (p.days - 1) * DAY).toISOString().slice(0, 10) }));
-  const activeFilters = [filters.basis !== "submitted", filters.source !== "all", filters.version !== "all"].filter(Boolean).length;
+  const activeFilters = [filters.basis !== "submitted", filters.source !== "all", filters.version !== "all", filters.answer !== null].filter(Boolean).length;
   const viewCounts: Record<ListView, number> = { all: summary.total, counted: counts.counted, pending: counts.pending_match, negative: summary.withAlerts, not_counted: notCounted };
   const sources = [
     { label: SOURCE_LABELS.online, value: summary.sources.online, color: C.total },
@@ -123,7 +125,8 @@ export function DashboardView({
               Filters
               {activeFilters > 0 && <span className="rounded-full bg-indigo-600 px-1.5 text-xs text-white">{activeFilters}</span>}
             </summary>
-            <form action={action} className="absolute left-0 z-30 mt-2 flex w-[min(92vw,22rem)] flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
+            {/* Keyed on the filters: links change them without a reload, and the fields must show the new values. */}
+            <form key={filtersToQuery(filters)} action={action} className="absolute left-0 z-30 mt-2 flex w-[min(92vw,22rem)] flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
               {Object.entries(hidden ?? {}).map(([k, v]) => (
                 <input key={k} type="hidden" name={k} value={v} />
               ))}
@@ -163,6 +166,25 @@ export function DashboardView({
                   ))}
                 </select>
               </Filter>
+              {answerOptions.length > 0 ? (
+                <Filter id="answer" label="Answer">
+                  <select id="answer" name="answer" defaultValue={currentAnswer ?? ""} className={field}>
+                    <option value="">Any answer</option>
+                    {currentAnswer && !answerOptions.some((g) => g.options.some((o) => o.value === currentAnswer)) && <option value={currentAnswer}>{answerLabel}</option>}
+                    {answerOptions.map((g, i) => (
+                      <optgroup key={`${i}-${g.label}`} label={g.label}>
+                        {g.options.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </Filter>
+              ) : (
+                currentAnswer && <input type="hidden" name="answer" value={currentAnswer} />
+              )}
               <div className="flex items-center justify-between gap-2 pt-1">
                 <Link href={`${action}${hidden ? `?${new URLSearchParams(hidden)}` : ""}`} className="text-sm text-gray-600 hover:text-brand-navy-900">
                   Reset
@@ -200,6 +222,15 @@ export function DashboardView({
       <p className="text-sm text-gray-600">
         {DATE_BASIS_LABELS[filters.basis]} from {filters.from} to {filters.to}, {SOURCE_FILTER_LABELS[filters.source].toLowerCase()}, {versionLabel}. Dates use the shop&apos;s local time.
         {filters.basis === "delivered" && " Responses not yet matched to a visit have no delivery date, so they are not in this view."}
+        {answerLabel && (
+          <>
+            {" "}
+            Only customers who answered <span className="font-medium text-brand-navy-900">{answerLabel}</span>.{" "}
+            <Link href={clearAnswerHref} className="font-medium text-indigo-600 hover:underline">
+              Show all answers
+            </Link>
+          </>
+        )}
       </p>
 
       <section data-tour="counts" aria-label="Response counts" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -355,6 +386,17 @@ export function DashboardView({
             />
           </section>
         ))
+      )}
+      {questions.length > 0 && questionsVersion && (
+        <QuestionResults
+          questions={questions}
+          versionLabel={questionsVersion.label}
+          answerLabel={answerLabel}
+          // The bars count one version's responses, so a click shows that version too.
+          filterHref={(answer) => `${href({ answer, version: questionsVersion.id })}#questions-heading`}
+          clearHref={`${clearAnswerHref}#questions-heading`}
+          responseHref={responseHref}
+        />
       )}
       {summary.groups.length > 1 && (
         <section data-tour="versions" aria-labelledby="versions-heading" className={card}>

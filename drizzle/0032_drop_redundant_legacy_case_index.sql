@@ -1,0 +1,1 @@
+DROP INDEX "legacy_case_shop_idx";

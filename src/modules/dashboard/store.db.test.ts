@@ -139,6 +139,23 @@ describe.skipIf(!process.env.DATABASE_URL)("shop dashboard", async () => {
       expect(withTest.summary.groups[0].metrics[0].average).toBe(corrected.summary.groups[0].metrics[0].average);
     }));
 
+  it("filters by an answer and reads each response's current answers with its scores (AT-31)", () =>
+    inRollback(async (tx) => {
+      const { shop: s } = await liveShop(tx, ["F1", "F2"]);
+      const lowId = await submitOnline(tx, s.id, "F1", low);
+      const highId = await submitOnline(tx, s.id, "F2", high);
+      const only = async (answer: string) => (await store.cohortRows(tx, s.id, parseFilters({ answer }, today), "America/Chicago", { withAnswers: false })).map((r) => r.id);
+      expect(await only("overall_rating:lte:2")).toEqual([lowId]);
+      expect(await only("service_aspects.communication:eq:excellent")).toEqual([highId]);
+      expect(await only("ready_on_time:eq:maybe")).toEqual([]);
+
+      // A correction changes which filter the response falls under, and the answers the results read.
+      await staff.correctResponse(tx, actor, lowId, 1, high, "Rating misread");
+      expect(await only("overall_rating:lte:2")).toEqual([]);
+      const rows = await store.cohortRows(tx, s.id, filters, "America/Chicago");
+      expect(rows.find((r) => r.id === lowId)?.answers).toMatchObject({ overall_rating: 5 });
+    }));
+
   it("counts drafts separately and never scores them (SR-16)", () =>
     inRollback(async (tx) => {
       const { shop: s } = await liveShop(tx, ["R1"]);

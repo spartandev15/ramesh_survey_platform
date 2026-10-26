@@ -4,6 +4,7 @@ import { pageOf } from "@/lib/pagination";
 import { requireShopRead } from "@/modules/access/principal";
 import { formatAnswer } from "@/modules/instruments/describe";
 import { recordAudit } from "@/modules/audit/audit";
+import { answerFilterOptions, describeAnswerFilter, questionResults, type QuestionResult } from "./answers";
 import { CATEGORY_LABELS, DATE_BASIS_LABELS, SOURCE_FILTER_LABELS, categorize, localDate, parseFilters, summarize, type Category, type DashboardFilters } from "./cohort";
 import { toCsv } from "@/lib/csv";
 import * as store from "./store";
@@ -45,13 +46,28 @@ export async function getDashboard(shopId: string, filters: DashboardFilters, pa
   return getDb().transaction(async (tx) => {
     const shop = await store.shopForDashboard(tx, shopId);
     if (!shop) return null;
-    const rows = await store.cohortRows(tx, shopId, filters, shop.timezone, { withAnswers: false });
+    // Answers come in the same read as the scores, so the question results and the scores always use the same revision.
+    const rows = await store.cohortRows(tx, shopId, filters, shop.timezone);
     // One connection per transaction: these run one after another, never in parallel.
     const versions = await store.versionDetails(tx, [...new Set(rows.map((r) => r.versionId))]);
     const versionOptions = await store.shopVersions(tx, shopId);
     const drafts = await store.draftCount(tx, shopId);
     const history = await store.historicalSummary(tx, shopId, filters.from, filters.to);
     const summary = summarize(rows, shop.isTestShop, versions, shop.timezone, filters);
+    // Question results for the version the scores show, from the same counted responses.
+    const main = summary.groups[0];
+    const mainVersion = main ? versions.get(main.versionId) : undefined;
+    const questions: QuestionResult[] =
+      main && mainVersion
+        ? questionResults(
+            mainVersion.definition,
+            rows.filter((r) => r.versionId === main.versionId && categorize(r, shop.isTestShop) === "counted"),
+          )
+        : [];
+    // The Answer filter offers the questions of the version on screen; with nothing on screen, the chosen or any version the shop has, so a filter that empties the view can still be changed.
+    const optionsFrom = mainVersion?.definition ?? (versionOptions.find((v) => v.id === filters.version) ?? versionOptions[0])?.definition;
+    const answerOptions = optionsFrom ? answerFilterOptions(optionsFrom) : [];
+    const answerLabel = filters.answer ? describeAnswerFilter(filters.answer, versionOptions.map((v) => v.definition)) : null;
     // The scores and charts use every row; the list below them shows one page of the chosen view.
     const listPage = pageOf(
       rows.filter((r) => inListView(view, categorize(r, shop.isTestShop), r.alerts.length > 0)),
@@ -68,7 +84,21 @@ export async function getDashboard(shopId: string, filters: DashboardFilters, pa
       alerts: r.alerts.map((a) => a.label),
       corrected: r.revision > 1,
     }));
-    return { shop, filters, today: localDate(new Date(), shop.timezone), summary, list: { ...listPage, items }, listView: view, versionOptions, drafts, history };
+    return {
+      shop,
+      filters,
+      today: localDate(new Date(), shop.timezone),
+      summary,
+      questions,
+      questionsVersion: main ? { id: main.versionId, label: main.label } : null,
+      answerOptions,
+      answerLabel,
+      list: { ...listPage, items },
+      listView: view,
+      versionOptions: versionOptions.map((v) => ({ id: v.id, label: v.label })),
+      drafts,
+      history,
+    };
   });
 }
 
@@ -110,9 +140,11 @@ export async function exportCsv(shopId: string, params: Record<string, string>, 
       "report_to",
       "report_source",
       "report_version",
+      "report_answer",
     ];
     const versionFilter = filters.version === "all" ? "All versions" : ((await store.versionDetails(tx, [filters.version])).get(filters.version)?.label ?? filters.version);
-    const report = [DATE_BASIS_LABELS[filters.basis], filters.from, filters.to, SOURCE_FILTER_LABELS[filters.source], versionFilter];
+    const answerFilter = filters.answer ? describeAnswerFilter(filters.answer, (await store.shopVersions(tx, shopId)).map((v) => v.definition)) : "Any answer";
+    const report = [DATE_BASIS_LABELS[filters.basis], filters.from, filters.to, SOURCE_FILTER_LABELS[filters.source], versionFilter, answerFilter];
     const body = rows.map((r) => {
       const category = categorize(r, shop.isTestShop);
       return [

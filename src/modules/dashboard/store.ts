@@ -5,6 +5,7 @@ import { historicalResponse, instrument, instrumentVersion, shop, surveyResponse
 import { combineDefinitions, parseDefinition, type InstrumentDefinition } from "@/modules/instruments/definition";
 import { allQuestions } from "@/modules/instruments/questions";
 import type { Answers, Outcomes } from "@/modules/instruments/evaluate";
+import { matchesAnswer } from "./answers";
 import { categorize, inCohort, type CohortRow, type DashboardFilters, type VersionInfo } from "./cohort";
 
 /**
@@ -30,8 +31,10 @@ export async function shopForDashboard(tx: Tx, shopId: string) {
 }
 
 /** Submitted responses for the shop inside the filters, newest first. */
-/** `withAnswers: false` leaves out the answer sets: the dashboard needs only scores, the export needs everything. */
+/** `withAnswers: false` leaves out the answer sets when only scores are needed. An answer filter always loads them. */
 export async function cohortRows(tx: Tx, shopId: string, filters: DashboardFilters, timezone: string, { withAnswers = true } = {}): Promise<DashboardRow[]> {
+  const answer = filters.answer;
+  if (answer) withAnswers = true;
   // A generous UTC window first; the exact shop-local date filter runs in inCohort.
   const window =
     filters.basis === "submitted"
@@ -84,7 +87,7 @@ export async function cohortRows(tx: Tx, shopId: string, filters: DashboardFilte
       revision: r.revision,
       visitKey: r.visit_key,
     }))
-    .filter((r) => inCohort(r, filters, timezone));
+    .filter((r) => inCohort(r, filters, timezone) && (!answer || matchesAnswer(r.answers, answer)));
 }
 
 export interface VersionDetail extends VersionInfo {
@@ -120,7 +123,7 @@ export async function shopVersions(tx: Tx, shopId: string) {
     tx,
     rows.map((r) => r.id),
   );
-  return [...details.entries()].map(([id, d]) => ({ id, label: d.label }));
+  return [...details.entries()].map(([id, d]) => ({ id, label: d.label, definition: d.definition }));
 }
 
 /** Surveys started but not submitted: shown so the reader knows they are not counted (SR-16). */

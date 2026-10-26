@@ -225,6 +225,13 @@
       "when": 1790766768136,
       "tag": "0031_lock_response_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792997051975,
+      "tag": "0032_drop_redundant_legacy_case_index",
+      "breakpoints": true
     }
   ]
 }

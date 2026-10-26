@@ -1,4 +1,5 @@
 import { isIsoDate } from "@/modules/shops/settings-policy";
+import { answerFilterParam, parseAnswerFilter, type AnswerFilter } from "./answers";
 
 /**
  * Dashboard cohort rules (SR-27, SR-28, SR-31). Pure logic so the dashboard
@@ -16,6 +17,8 @@ export interface DashboardFilters {
   source: SourceFilter;
   /** "all" or an instrument version id. */
   version: string;
+  /** Only responses with this answer; applied where answers are loaded (store.cohortRows). */
+  answer: AnswerFilter | null;
 }
 
 export const DATE_BASIS_LABELS: Record<DateBasis, string> = { submitted: "Date submitted", delivered: "Date vehicle delivered" };
@@ -43,11 +46,11 @@ export function parseFilters(params: Record<string, string | string[] | undefine
   const basis = one("basis") === "delivered" ? "delivered" : "submitted";
   const source = (["online", "paper", "public"] as const).find((s) => s === one("source")) ?? "all";
   const version = UUID_RE.test(one("version")) ? one("version") : "all";
-  return { from, to, basis, source, version };
+  return { from, to, basis, source, version, answer: parseAnswerFilter(one("answer")) };
 }
 
 export function filtersToQuery(f: DashboardFilters): string {
-  return new URLSearchParams({ from: f.from, to: f.to, basis: f.basis, source: f.source, version: f.version }).toString();
+  return new URLSearchParams({ from: f.from, to: f.to, basis: f.basis, source: f.source, version: f.version, ...(f.answer ? { answer: answerFilterParam(f.answer) } : {}) }).toString();
 }
 
 export type Category = "counted" | "pending_match" | "duplicate" | "legacy_reference" | "excluded_test";

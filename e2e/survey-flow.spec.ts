@@ -2,10 +2,11 @@
  * Phase 1 end-to-end flow: PSG builds a survey, previews it, publishes a test
  * version, issues a test link; a respondent completes it on a phone; PSG sees
  * the answers and the server-computed outcomes with rule provenance.
- * Requirements: SR-14, SR-15, SR-16, SR-17, SR-39, SR-44, AT-14, AT-15, AT-44.
+ * The dashboard shows the answers per question and filters by one (AT-31).
+ * Requirements: SR-14, SR-15, SR-16, SR-17, SR-31, SR-39, SR-44, AT-14, AT-15, AT-31, AT-44.
  */
 import { expect, test } from "@playwright/test";
-import { adminCredentials, createTestLink, ensureTestShop, respondentPhone, signIn, unique } from "./helpers";
+import { adminCredentials, createTestLink, ensureTestShop, respondentPhone, signIn, TEST_SHOP, unique } from "./helpers";
 
 test.skip(!adminCredentials(), "Set E2E_EMAIL and E2E_PASSWORD to run browser tests");
 
@@ -86,14 +87,33 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await expect(page.locator("dd.font-mono", { hasText: /^2$/ })).toBeVisible(); // mean of one rating of 2
   await expect(page.getByText(versionHash!)).toBeVisible();
 
-  // 8. A new draft keeps the published question IDs fixed (SR-15)
+  // 8. The dashboard shows how customers answered each question, and filters to one answer
+  const versionPage = page.url();
+  await page.goto("/psg/dashboard");
+  await page.getByLabel("Shop", { exact: true }).selectOption({ label: TEST_SHOP.name });
+  await page.waitForURL(/shop=/);
+  await page.getByText("Filters", { exact: true }).click();
+  await page.locator("select#version").selectOption({ label: `${name} v1 (TEST)` });
+  await page.getByRole("button", { name: "Apply" }).click();
+  await page.waitForURL(/version=/);
+  const questions = page.getByRole("region", { name: "Question results" });
+  await expect(questions.getByText("Call me when it is ready")).toBeVisible();
+  await questions.getByRole("link", { name: "How satisfied are you with the repair?: 2, 1 (100%). Show these customers" }).click();
+  await page.waitForURL(/answer=repair_rating%3Aeq%3A2/);
+  await expect(questions.getByText("Showing only customers who answered How satisfied are you with the repair?: 2")).toBeVisible();
+  const csv = await (await page.request.get((await page.getByRole("link", { name: "Export CSV" }).getAttribute("href"))!)).text();
+  expect(csv.trim().split(/\r\n/)).toHaveLength(2);
+  expect(csv).toContain('"How satisfied are you with the repair?: 2"');
+  await page.goto(versionPage);
+
+  // 9. A new draft keeps the published question IDs fixed (SR-15)
   await page.getByRole("link", { name: /Version 1/ }).click();
   await page.getByRole("button", { name: "New draft from v1" }).click();
   await page.waitForURL(/\/edit$/);
   await page.getByRole("button", { name: /repair_rating How satisfied/ }).click();
   await expect(page.getByLabel("Question ID")).toBeDisabled();
 
-  // 9. "Copy a survey" starts a new survey from a chosen version (SR-44 duplication)
+  // 10. "Copy a survey" starts a new survey from a chosen version (SR-44 duplication)
   await page.goto("/psg/instruments");
   await page.getByText("Copy a survey", { exact: true }).click();
   await page.getByLabel("Survey to copy").selectOption({ label: name });

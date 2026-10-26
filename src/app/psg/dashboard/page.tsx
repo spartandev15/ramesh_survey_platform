@@ -21,10 +21,10 @@ export default async function PsgDashboardPage({ searchParams }: PageProps<"/psg
   const data = shop ? await getDashboard(shop.id, filters, pageNumber(params.page), listView(params.show)) : null;
   const asOf = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: shop?.timezone ?? "America/New_York", timeZoneName: "short" }).format(new Date());
 
-  // Changing shop keeps the period and filters; without JavaScript the Show button submits.
+  // Changing shop keeps the period and filters, except the answer filter: another shop may use another survey. Without JavaScript the Show button submits.
   const picker = (
     <LiveForm label="Choose a shop" className="flex items-end gap-2">
-      {Object.entries(params).map(([k, v]) => (typeof v === "string" && k !== "shop" && k !== "page" ? <input key={k} type="hidden" name={k} value={v} /> : null))}
+      {Object.entries(params).map(([k, v]) => (typeof v === "string" && k !== "shop" && k !== "page" && k !== "answer" ? <input key={k} type="hidden" name={k} value={v} /> : null))}
       <div data-tour="shop" className="relative flex flex-col gap-1">
         <label htmlFor="dashboard-shop" className="text-[11px] font-medium text-gray-500">
           Shop
