@@ -4,8 +4,8 @@ import { Bell, ChevronDown, Menu, Search, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { LinkPending } from "@/components/loading";
+import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { LinkPending, NavProgress } from "@/components/loading";
 import { PageTour } from "@/components/tour";
 import type { Notice } from "@/modules/notifications/notifications";
 import { NAV_ICONS, SIDEBAR_COOKIE, type NavItem } from "./nav";
@@ -119,6 +119,9 @@ export function DashboardShell({ title, nav, userName, userEmail, search, notifi
 
   return (
     <div className="flex min-h-screen w-full">
+      <Suspense fallback={null}>
+        <NavProgress />
+      </Suspense>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2"

@@ -212,7 +212,7 @@ export function DashboardView({
               );
             })}
           </nav>
-          <a data-tour="export" href={exportHref} className="flex h-10 items-center gap-2 rounded-xl bg-brand-navy-900 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-navy-700">
+          <a data-tour="export" href={exportHref} download className="flex h-10 items-center gap-2 rounded-xl bg-brand-navy-900 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-navy-700">
             <Download className="size-4" aria-hidden="true" />
             Export CSV
           </a>

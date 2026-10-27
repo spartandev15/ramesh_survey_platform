@@ -2,6 +2,20 @@
 
 Each delivery with its commit, what changed, how it was verified and what is still open. Requirement status is in [traceability.md](traceability.md); open gates and proposals are in [open-items.md](open-items.md).
 
+## 2026-10-27: visible loading on every click
+
+**Where:** live on `https://survey.spartanbots.xyz` since 2026-10-27.
+
+**Added**
+
+- A thin progress bar at the top of every dashboard page while the next page loads, so a slow host never looks frozen.
+- The view and edit icons in list rows, and the filter chips on the Shops, Surveys, Readiness and Invitations pages, show a spinner while their page opens.
+- The three CSV export buttons download the file directly instead of starting a page load that never finishes.
+
+**Verified:** 345 unit and database tests, all 26 browser tests (a new one checks the progress bar and row spinners), lint, typecheck and the production build, locally.
+
+**Open:** the test data the live browser run left on the live database (5 `E2E ...` shops and 4 test users) is to be cleared before real records go in. Still open from 2026-10-26: the worker cron line, `admin-password.txt`, captcha.
+
 ## 2026-10-26: test deployment on shared hosting, fixes from testing it live
 
 **Where:** `https://survey.spartanbots.xyz` (Namecheap shared cPanel hosting, database on Supabase). Setup is in the runbook, section 1a.

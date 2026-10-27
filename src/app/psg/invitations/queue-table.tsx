@@ -61,11 +61,8 @@ export function QueueTable({ shopId, items, selectable, canManage }: { shopId: s
     });
   }
 
-  if (items.length === 0) return <p className="rounded-xl border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">Nothing here.</p>;
-
-  return (
-    <div className="flex flex-col gap-3">
-      {message && (
+  // Sending the last ready rows empties the list: the result still shows above "Nothing here."
+  const notice = message && (
         <div role={message.tone === "error" ? "alert" : "status"} className={`rounded-lg border px-4 py-3 text-sm ${message.tone === "error" ? "border-brand-red/30 bg-brand-red/5 text-brand-red-dark" : "border-green-600/30 bg-green-50 text-green-800"}`}>
           <p>{message.text}</p>
           {message.details && message.details.length > 0 && (
@@ -76,7 +73,19 @@ export function QueueTable({ shopId, items, selectable, canManage }: { shopId: s
             </ul>
           )}
         </div>
-      )}
+  );
+
+  if (items.length === 0)
+    return (
+      <div className="flex flex-col gap-3">
+        {notice}
+        <p className="rounded-xl border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">Nothing here.</p>
+      </div>
+    );
+
+  return (
+    <div className="flex flex-col gap-3">
+      {notice}
 
       {selectable && canManage && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200/80 bg-white p-3 shadow-sm">

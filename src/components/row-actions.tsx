@@ -1,5 +1,6 @@
 import { Eye, Pencil, type LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { PendingSwap } from "./loading";
 
 /**
  * View and edit buttons for a list row: icons on one line, each with a
@@ -22,7 +23,9 @@ export function RowActions({ actions }: { actions: { href: string; label: string
             title={a.title ?? a.label}
             className={`${ICON_BUTTON} ${a.kind === "edit" ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <Icon className="size-4" aria-hidden="true" />
+            <PendingSwap>
+              <Icon className="size-4" aria-hidden="true" />
+            </PendingSwap>
             <span className="sr-only">{a.label}</span>
           </Link>
         );

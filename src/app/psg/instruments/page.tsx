@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Sparkline } from "@/components/dashboard/charts";
 import { LiveForm } from "@/components/live-form";
+import { LinkPending } from "@/components/loading";
 import { hasCapability } from "@/modules/access/capabilities";
 import { Pagination } from "@/components/pagination";
 import { pageNumber, pageOf } from "@/lib/pagination";
@@ -160,9 +161,10 @@ export default async function InstrumentsPage({ searchParams }: PageProps<"/psg/
                     key={c.label}
                     href={link({ status: c.status })}
                     aria-current={active ? "true" : undefined}
-                    className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${active ? "bg-indigo-600 text-white" : "bg-gray-50 text-gray-700 ring-1 ring-gray-200 hover:ring-gray-400"}`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${active ? "bg-indigo-600 text-white" : "bg-gray-50 text-gray-700 ring-1 ring-gray-200 hover:ring-gray-400"}`}
                   >
                     {c.label} ({c.count})
+                    <LinkPending className="size-3.5" />
                   </Link>
                 );
               })}

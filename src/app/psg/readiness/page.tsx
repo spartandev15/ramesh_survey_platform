@@ -41,6 +41,7 @@ export default async function ReadinessPage({ searchParams }: PageProps<"/psg/re
         {/* The whole manifest, every shop and check, to keep as launch evidence (WP-11). */}
         <a
           href="/psg/readiness/export"
+          download
           className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-50"
         >
           <Download className="size-4" aria-hidden="true" />

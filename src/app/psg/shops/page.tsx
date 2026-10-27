@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Sparkline } from "@/components/dashboard/charts";
 import { LiveForm } from "@/components/live-form";
+import { LinkPending } from "@/components/loading";
 import { Modal } from "@/components/modal";
 import { hasCapability } from "@/modules/access/capabilities";
 import { Pagination } from "@/components/pagination";
@@ -83,6 +84,7 @@ export default async function ShopsPage({ searchParams }: PageProps<"/psg/shops"
         <div className="flex items-center gap-2">
           <a
             href={`/psg/shops/export${Object.keys(filterQuery).length ? `?${new URLSearchParams(filterQuery)}` : ""}`}
+            download
             className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
           >
             <Download className="size-4" aria-hidden="true" />
@@ -132,9 +134,10 @@ export default async function ShopsPage({ searchParams }: PageProps<"/psg/shops"
               key={c.label}
               href={c.href}
               aria-current={c.active ? "true" : undefined}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${c.active ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-600/20" : "bg-gray-50 text-gray-700 ring-1 ring-gray-200 hover:ring-gray-400"}`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${c.active ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-600/20" : "bg-gray-50 text-gray-700 ring-1 ring-gray-200 hover:ring-gray-400"}`}
             >
               {c.label} ({c.count})
+              <LinkPending className="size-3.5" />
             </Link>
           ))}
         </nav>
