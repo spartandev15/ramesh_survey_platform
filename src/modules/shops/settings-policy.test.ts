@@ -171,8 +171,11 @@ describe("settings input", () => {
     for (const ok of ["https://shop.com/logo.png", `/shop-logo/${id}?v=1793600000000`]) {
       expect(settingsInputSchema.parse({ ...valid, logoUrl: ok }).logoUrl).toBe(ok);
     }
-    for (const bad of [`/shop-logo/${id}`, `/shop-logo/${id}?v=1&x=2`, "/psg/shops", `//evil.example/shop-logo/${id}?v=1`]) {
-      expect(settingsInputSchema.safeParse({ ...valid, logoUrl: bad }).success, bad).toBe(false);
+    for (const bad of [`/shop-logo/${id}`, `/shop-logo/${id}?v=1&x=2`, "/psg/shops", `//evil.example/shop-logo/${id}?v=1`, "http://shop.com/logo.png", "https://"]) {
+      const result = settingsInputSchema.safeParse({ ...valid, logoUrl: bad });
+      expect(result.success, bad).toBe(false);
+      // The message says what to do, next to the field.
+      expect(result.error?.issues[0].message, bad).toBe("Use an https:// link");
     }
   });
 });
