@@ -35,12 +35,30 @@ function wrap(condition: Condition): string {
 
 export const QUESTION_TYPE_LABELS: Record<Question["type"], string> = {
   single_choice: "Single choice",
-  multi_choice: "Multiple choice",
+  multi_choice: "Checkboxes",
   rating: "Rating",
   number: "Number",
   text: "Text",
   matrix: "Matrix",
 };
+
+/**
+ * What the builder offers as answer types. "Text area" is a text question with multiple lines,
+ * listed on its own so it is easy to find; the stored definition is unchanged.
+ */
+export type AnswerKind = Question["type"] | "long_text";
+
+export const ANSWER_KIND_LABELS: Record<AnswerKind, string> = {
+  single_choice: "Single choice",
+  multi_choice: "Checkboxes",
+  rating: "Rating",
+  number: "Number",
+  text: "Text",
+  long_text: "Text area",
+  matrix: "Matrix",
+};
+
+export const answerKind = (question: Question): AnswerKind => (question.type === "text" && question.multiline ? "long_text" : question.type);
 
 /**
  * A stored answer as readable text, using option labels and keeping the

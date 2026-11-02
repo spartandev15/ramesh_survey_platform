@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { convertQuestion } from "@/modules/instruments/builder-ops";
-import type { Question, QuestionType } from "@/modules/instruments/definition";
-import { QUESTION_TYPE_LABELS } from "@/modules/instruments/describe";
+import type { Question } from "@/modules/instruments/definition";
+import { ANSWER_KIND_LABELS, answerKind, type AnswerKind } from "@/modules/instruments/describe";
 import { ConditionEditor } from "./condition-editor";
 import { OptionsEditor } from "./options-editor";
 import { CheckboxInput, NumberInput, optional, SelectInput, TextInput } from "./ui";
@@ -36,11 +36,11 @@ export function QuestionEditor({ question: q, onChange, earlierQuestions, idLock
     <div className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
         <TextInput label="Question text" value={q.title} onChange={(title) => patch({ title })} multiline />
-        <SelectInput<QuestionType>
+        <SelectInput<AnswerKind>
           label="Answer type"
-          value={q.type}
-          options={(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => ({ value: t, label: QUESTION_TYPE_LABELS[t] }))}
-          onChange={(type) => onChange(convertQuestion(q, type))}
+          value={answerKind(q)}
+          options={(Object.keys(ANSWER_KIND_LABELS) as AnswerKind[]).map((k) => ({ value: k, label: ANSWER_KIND_LABELS[k] }))}
+          onChange={(kind) => onChange(convertQuestion(q, kind))}
         />
       </div>
 

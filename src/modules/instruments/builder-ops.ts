@@ -3,6 +3,7 @@
  * so the editing rules are unit-tested.
  */
 import type { Choice, ComparableValue, Condition, InstrumentDefinition, Question, QuestionType } from "./definition";
+import type { AnswerKind } from "./describe";
 import { allQuestions } from "./questions";
 
 /** Next free id like `question_3`, never reusing an existing one. */
@@ -49,15 +50,20 @@ function typeFields(type: QuestionType) {
 }
 
 /** `idPrefix` is "add_" for a shop's own questions (SR-45), so new ids never collide with the core. */
-export function newQuestion(type: QuestionType, takenIds: Iterable<string>, idPrefix = ""): Question {
-  return { id: uniqueId(`${idPrefix}question`, takenIds), title: "Untitled question", required: false, ...typeFields(type) } as Question;
+export function newQuestion(kind: AnswerKind, takenIds: Iterable<string>, idPrefix = ""): Question {
+  const fields = kind === "long_text" ? { ...typeFields("text"), multiline: true } : typeFields(kind);
+  return { id: uniqueId(`${idPrefix}question`, takenIds), title: "Untitled question", required: false, ...fields } as Question;
 }
 
 /**
  * Change a question's type, keeping its id, text, requiredness and display
  * rule. Choice-based types keep their options when switching between them.
+ * Text and Text area are one type: switching only turns multiple lines on or off.
  */
-export function convertQuestion(question: Question, type: QuestionType): Question {
+export function convertQuestion(question: Question, kind: AnswerKind): Question {
+  if (question.type === "text" && (kind === "text" || kind === "long_text")) return { ...question, multiline: kind === "long_text" };
+  if (kind === "long_text") return { ...convertQuestion(question, "text"), multiline: true } as Question;
+  const type = kind;
   if (question.type === type) return question;
   const base = {
     id: question.id,

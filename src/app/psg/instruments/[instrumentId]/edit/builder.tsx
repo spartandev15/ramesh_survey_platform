@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { insertQuestion, moveItem, moveQuestion, newQuestion, questionReferences, uniqueId, type QuestionPosition } from "@/modules/instruments/builder-ops";
-import { ADDITION_PREFIX, parseDefinition, validateDefinition, type DefinitionIssue, type InstrumentDefinition, type QuestionType } from "@/modules/instruments/definition";
+import { ADDITION_PREFIX, parseDefinition, validateDefinition, type DefinitionIssue, type InstrumentDefinition } from "@/modules/instruments/definition";
+import type { AnswerKind } from "@/modules/instruments/describe";
 import { allQuestions } from "@/modules/instruments/questions";
 import { discardDraftAction, publishAction, saveDraftAction } from "../../actions";
 import { SurveyCanvas, type Selection } from "./canvas";
@@ -390,10 +391,10 @@ function QuestionsTab({
       ? definition.pages.slice(0, selection.page + 1).flatMap((p, pi) => (pi < selection.page ? p.questions : p.questions.slice(0, selection.question)))
       : [];
 
-  function insert(type: QuestionType, at: QuestionPosition) {
+  function insert(kind: AnswerKind, at: QuestionPosition) {
     // Never reuse an ID from the published version, even if that question was deleted from this draft:
     // reports compare versions by question ID, so a reused ID would join two different questions (SR-15).
-    const question = newQuestion(type, [...allQuestions(definition).map((q) => q.id), ...lockedQuestions], idPrefix);
+    const question = newQuestion(kind, [...allQuestions(definition).map((q) => q.id), ...lockedQuestions], idPrefix);
     // Mirror the insert on the current definition to know where it lands.
     const landed = insertQuestion(structuredClone(definition), question, at);
     update((d) => void insertQuestion(d, question, at));

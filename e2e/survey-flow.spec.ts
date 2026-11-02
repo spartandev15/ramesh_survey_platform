@@ -28,7 +28,13 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await page.getByLabel("Question ID").fill("repair_rating");
   await page.getByLabel("Required").selectOption("yes");
 
-  await page.getByRole("button", { name: /^Add text question/ }).click();
+  // Checkboxes and Text area are offered by name; Text area is a text question with multiple lines.
+  await expect(page.getByRole("button", { name: /^Add checkboxes question/ })).toBeVisible();
+  await page.getByRole("button", { name: /^Add text area question/ }).click();
+  await expect(page.getByLabel("Answer type")).toHaveValue("long_text");
+  await expect(page.getByLabel("Allow multiple lines")).toBeChecked();
+  await page.getByLabel("Answer type").selectOption("text");
+  await expect(page.getByLabel("Allow multiple lines")).not.toBeChecked();
   await page.getByLabel("Question text").fill("What should we have done better?");
   await page.getByLabel("Question ID").fill("do_better");
   await page.locator("fieldset", { hasText: "Show this question" }).getByRole("button", { name: "Add clause" }).click();

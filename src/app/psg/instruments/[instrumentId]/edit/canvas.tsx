@@ -17,39 +17,40 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AlertTriangle, ArrowDown, ArrowUp, CircleDot, FileText, Grid3x3, GripVertical, Hash, ListChecks, Plus, Star, Trash2, Type, type LucideIcon } from "lucide-react";
+import { AlertTriangle, AlignLeft, ArrowDown, ArrowUp, CircleDot, FileText, Grid3x3, GripVertical, Hash, ListChecks, Plus, Star, Trash2, Type, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import type { QuestionPosition } from "@/modules/instruments/builder-ops";
-import type { InstrumentDefinition, Question, QuestionType } from "@/modules/instruments/definition";
-import { QUESTION_TYPE_LABELS } from "@/modules/instruments/describe";
+import type { InstrumentDefinition, Question } from "@/modules/instruments/definition";
+import { ANSWER_KIND_LABELS, type AnswerKind } from "@/modules/instruments/describe";
 import { buttonClass } from "./ui";
 
 export type Selection = { kind: "survey" } | { kind: "page"; page: number } | { kind: "question"; page: number; question: number };
 
-const TYPE_ICONS: Record<QuestionType, LucideIcon> = {
+const TYPE_ICONS: Record<AnswerKind, LucideIcon> = {
   single_choice: CircleDot,
   multi_choice: ListChecks,
   rating: Star,
   number: Hash,
   text: Type,
+  long_text: AlignLeft,
   matrix: Grid3x3,
 };
 
-const TYPES = Object.keys(QUESTION_TYPE_LABELS) as QuestionType[];
+const TYPES = Object.keys(ANSWER_KIND_LABELS) as AnswerKind[];
 
 // Drag ids. Positions are stable during a drag because the definition only changes on drop.
 const questionKey = (page: number, index: number) => `q:${page}:${index}`;
 const pageKey = (page: number) => `page:${page}`;
-const paletteKey = (type: QuestionType) => `new:${type}`;
+const paletteKey = (type: AnswerKind) => `new:${type}`;
 
-type DragTarget = { kind: "question"; page: number; index: number } | { kind: "page"; page: number } | { kind: "palette"; type: QuestionType };
+type DragTarget = { kind: "question"; page: number; index: number } | { kind: "page"; page: number } | { kind: "palette"; type: AnswerKind };
 
 function parseKey(key: string | number | undefined): DragTarget | null {
   if (typeof key !== "string") return null;
   const [kind, a, b] = key.split(":");
   if (kind === "q") return { kind: "question", page: Number(a), index: Number(b) };
   if (kind === "page") return { kind: "page", page: Number(a) };
-  if (kind === "new") return { kind: "palette", type: a as QuestionType };
+  if (kind === "new") return { kind: "palette", type: a as AnswerKind };
   return null;
 }
 
@@ -59,7 +60,7 @@ interface CanvasProps {
   onSelect: (selection: Selection) => void;
   flagged: Set<string>;
   onMove: (from: QuestionPosition, to: QuestionPosition) => void;
-  onInsert: (type: QuestionType, at: QuestionPosition) => void;
+  onInsert: (type: AnswerKind, at: QuestionPosition) => void;
   onRemove: (page: number, index: number) => void;
   onAddPage: () => void;
   onMovePage: (from: number, to: number) => void;
@@ -83,7 +84,7 @@ export function SurveyCanvas(props: CanvasProps) {
 
   const label = (target: DragTarget | null) => {
     if (!target) return "";
-    if (target.kind === "palette") return `new ${QUESTION_TYPE_LABELS[target.type].toLowerCase()} question`;
+    if (target.kind === "palette") return `new ${ANSWER_KIND_LABELS[target.type].toLowerCase()} question`;
     if (target.kind === "page") return `end of page ${target.page + 1}`;
     const q = definition.pages[target.page]?.questions[target.index];
     return q ? `question ${q.id} on page ${target.page + 1}` : "question";
@@ -208,19 +209,19 @@ export function SurveyCanvas(props: CanvasProps) {
   );
 }
 
-function PaletteChip({ type, lifted }: { type: QuestionType; lifted?: boolean }) {
+function PaletteChip({ type, lifted }: { type: AnswerKind; lifted?: boolean }) {
   const Icon = TYPE_ICONS[type];
   return (
     <span
       className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-sm ${lifted ? "border-brand-navy-700 bg-white text-brand-navy-900 shadow-lg" : "border-gray-200 bg-gray-50 text-gray-700"}`}
     >
       <Icon aria-hidden="true" className="size-4 text-brand-red" />
-      {QUESTION_TYPE_LABELS[type]}
+      {ANSWER_KIND_LABELS[type]}
     </span>
   );
 }
 
-function PaletteItem({ type, onAdd }: { type: QuestionType; onAdd: () => void }) {
+function PaletteItem({ type, onAdd }: { type: AnswerKind; onAdd: () => void }) {
   // No keyboard-drag attributes: the palette is a plain button for keyboard users (see onClick).
   const { listeners, setNodeRef, isDragging } = useDraggable({ id: paletteKey(type) });
   return (
@@ -231,7 +232,7 @@ function PaletteItem({ type, onAdd }: { type: QuestionType; onAdd: () => void })
       // after the current selection, which is the simplest keyboard path.
       onPointerDown={listeners?.onPointerDown as React.PointerEventHandler<HTMLButtonElement> | undefined}
       onClick={onAdd}
-      aria-label={`Add ${QUESTION_TYPE_LABELS[type].toLowerCase()} question. Drag onto a page to choose its position.`}
+      aria-label={`Add ${ANSWER_KIND_LABELS[type].toLowerCase()} question. Drag onto a page to choose its position.`}
       className={`cursor-grab text-left transition hover:[&>span]:border-brand-navy-700 active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
     >
       <PaletteChip type={type} />

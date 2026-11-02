@@ -15,6 +15,7 @@ import {
 } from "./builder-ops";
 import { demoDefinition } from "./demo-definition";
 import { parseDefinition, type Question } from "./definition";
+import { answerKind } from "./describe";
 import { allQuestions } from "./questions";
 
 const q = (id: string) => allQuestions(demoDefinition).find((x) => x.id === id) as Question;
@@ -26,7 +27,7 @@ describe("builder ids", () => {
   });
 
   it("creates new questions of every type that pass the definition schema", () => {
-    for (const type of ["single_choice", "multi_choice", "rating", "number", "text", "matrix"] as const) {
+    for (const type of ["single_choice", "multi_choice", "rating", "number", "text", "long_text", "matrix"] as const) {
       const question = newQuestion(type, []);
       const parsed = parseDefinition({ schemaVersion: 1, pages: [{ id: "p", questions: [question] }] });
       expect(parsed.ok, type).toBe(true);
@@ -43,6 +44,20 @@ describe("changing a question's type", () => {
   it("keeps options between choice types", () => {
     const converted = convertQuestion(q("ready_on_time"), "multi_choice");
     expect(converted.type === "multi_choice" && converted.choices.map((c) => c.id)).toEqual(["yes", "no"]);
+  });
+
+  it("offers Text area as a text question with multiple lines, both ways", () => {
+    const area = newQuestion("long_text", []);
+    expect(area).toMatchObject({ type: "text", multiline: true });
+    expect(answerKind(area)).toBe("long_text");
+    expect(answerKind(newQuestion("text", []))).toBe("text");
+
+    const short = convertQuestion(area, "text");
+    expect(short).toMatchObject({ id: area.id, type: "text", multiline: false, maxLength: 2000 });
+    expect(convertQuestion(short, "long_text")).toMatchObject({ type: "text", multiline: true });
+    // From another type, the title and display rule stay.
+    expect(convertQuestion(q("delay_detail"), "long_text")).toMatchObject({ id: "delay_detail", type: "text", multiline: true, visibleWhen: q("delay_detail").visibleWhen });
+    expect(answerKind(convertQuestion(area, "multi_choice"))).toBe("multi_choice");
   });
 });
 
