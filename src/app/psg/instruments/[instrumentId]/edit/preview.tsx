@@ -2,10 +2,9 @@
 
 import { RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
-import { QuestionField } from "@/components/survey/question-field";
+import { PagedAnswerSheet } from "@/components/survey/pager";
 import type { InstrumentDefinition } from "@/modules/instruments/definition";
-import { allQuestions } from "@/modules/instruments/questions";
-import { computeOutcomes, evaluateAnswers, evaluateCondition, evaluateSubmission, type Answers, type AnswerValue } from "@/modules/instruments/evaluate";
+import { computeOutcomes, evaluateAnswers, evaluateSubmission, type Answers } from "@/modules/instruments/evaluate";
 import { buttonClass } from "./ui";
 
 /**
@@ -16,81 +15,65 @@ import { buttonClass } from "./ui";
 export function Preview({ definition }: { definition: InstrumentDefinition }) {
   const [answers, setAnswers] = useState<Answers>({});
   const [checked, setChecked] = useState(false);
+  const [finished, setFinished] = useState(false);
+  // A new round starts the pages again from the first.
+  const [round, setRound] = useState(0);
 
-  const questions = useMemo(() => allQuestions(definition), [definition]);
-  const byId = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions]);
-  const evaluated = useMemo(() => evaluateAnswers(definition, answers, "draft"), [definition, answers]);
   const submission = useMemo(() => evaluateSubmission(definition, answers), [definition, answers]);
   const outcomes = useMemo(() => {
     const submitSet = evaluateAnswers(definition, answers, "submit").answers;
     return computeOutcomes(definition, submitSet);
   }, [definition, answers]);
 
-  const visible = new Set(evaluated.visible);
-  const errors = new Map<string, string>();
-  for (const e of evaluated.errors) errors.set(e.questionId, e.message);
-  if (checked && !submission.ok) for (const e of submission.errors) if (!errors.has(e.questionId)) errors.set(e.questionId, e.message);
-
-  function isRequired(questionId: string): boolean {
-    const q = byId.get(questionId);
-    if (!q) return false;
-    if (typeof q.required === "boolean") return q.required;
-    const visibleAnswers = Object.fromEntries(Object.entries(evaluated.answers).filter(([id]) => visible.has(id)));
-    return evaluateCondition(q.required, { questions: byId, answers: visibleAnswers });
+  function reset() {
+    setAnswers({});
+    setChecked(false);
+    setFinished(false);
+    setRound((r) => r + 1);
   }
-
-  const setAnswer = (id: string, value: AnswerValue | undefined) =>
-    setAnswers((prev) => {
-      const next = { ...prev };
-      if (value === undefined) delete next[id];
-      else next[id] = value;
-      return next;
-    });
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
       <div className="flex flex-col gap-4">
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">Preview only. Answers here are never saved or counted.</p>
-        {definition.intro && <p className="text-sm text-gray-700">{definition.intro}</p>}
-        {definition.pages.map((page, p) => {
-          const pageQuestions = page.questions.filter((q) => visible.has(q.id));
-          return (
-            <section key={page.id} className="rounded-xl border border-gray-200 bg-white p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                Page {p + 1}
-                {page.title ? `: ${page.title}` : ""}
-              </h3>
-              {pageQuestions.length === 0 && <p className="mt-3 text-sm text-gray-500">No questions are shown on this page for the current answers.</p>}
-              <div className="mt-4 flex flex-col gap-6">
-                {pageQuestions.map((q) => (
-                  <QuestionField
-                    key={q.id}
-                    idPrefix="preview"
-                    question={q}
-                    value={answers[q.id]}
-                    error={errors.get(q.id)}
-                    required={isRequired(q.id)}
-                    onChange={(v) => setAnswer(q.id, v)}
-                  />
-                ))}
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Preview only, shown as customers see it, one page at a time. Answers here are never saved or counted. Each shop&apos;s own logo and colour show on its real survey.
+        </p>
+        <div className="rounded-lg bg-surface p-3 sm:p-6">
+          <div className="rounded-lg bg-white px-5 pb-8 pt-6 shadow-md sm:px-10">
+            {finished ? (
+              <div role="status" className="py-10 text-center">
+                <p className="text-xl font-semibold text-brand-navy-900">End of the survey</p>
+                <p className="mt-2 text-sm text-gray-600">A customer would see the thank-you page now. The results are on the right.</p>
+                <button type="button" onClick={reset} className={`${buttonClass.secondary} mt-6`}>
+                  <RotateCcw aria-hidden="true" className="size-4" /> Start again
+                </button>
               </div>
-            </section>
-          );
-        })}
+            ) : (
+              <>
+                {definition.intro && <p className="mb-6 text-gray-700">{definition.intro}</p>}
+                <PagedAnswerSheet
+                  key={round}
+                  definition={definition}
+                  answers={answers}
+                  onChange={setAnswers}
+                  idPrefix="preview"
+                  finishLabel="Submit survey"
+                  onFinish={() => {
+                    setChecked(true);
+                    setFinished(true);
+                  }}
+                />
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       <aside aria-label="Preview results" className="flex h-fit flex-col gap-4 xl:sticky xl:top-20">
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-semibold text-brand-navy-900">What the server would record</h3>
-            <button
-              type="button"
-              onClick={() => {
-                setAnswers({});
-                setChecked(false);
-              }}
-              className={buttonClass.ghost}
-            >
+            <button type="button" onClick={reset} className={buttonClass.ghost}>
               <RotateCcw aria-hidden="true" className="size-4" /> Reset
             </button>
           </div>

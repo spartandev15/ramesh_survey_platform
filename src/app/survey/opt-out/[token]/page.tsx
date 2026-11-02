@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Link2Off } from "lucide-react";
 import { loadOptOutPage } from "@/modules/email-ledger/public";
-import { ShopHeader } from "../../shop-header";
+import { SurveyFrame } from "../../shop-header";
 import { OptOutForm } from "./opt-out-form";
 
 export const metadata: Metadata = { title: "Survey emails", robots: { index: false, follow: false }, referrer: "no-referrer" };
@@ -25,13 +25,8 @@ export default async function OptOutPage({ params }: PageProps<"/survey/opt-out/
     );
   }
   return (
-    <div className="min-h-screen bg-surface">
-      <ShopHeader name={page.shopName} logoUrl={page.logoUrl} brandColor={page.brandColor} />
-      <main className="mx-auto max-w-2xl px-4 py-8">
-        <div className="rounded-2xl bg-white p-5 shadow-sm sm:p-8">
-          <OptOutForm token={token} shopName={page.shopName} />
-        </div>
-      </main>
-    </div>
+    <SurveyFrame shop={{ name: page.shopName, logoUrl: page.logoUrl, brandColor: page.brandColor }}>
+      <OptOutForm token={token} shopName={page.shopName} />
+    </SurveyFrame>
   );
 }

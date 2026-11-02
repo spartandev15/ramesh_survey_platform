@@ -165,4 +165,14 @@ describe("settings input", () => {
       expect(settingsInputSchema.safeParse({ ...valid, ...change }).success, JSON.stringify(change)).toBe(false);
     }
   });
+
+  it("accepts an https logo or this app's uploaded logo, and nothing else on this app", () => {
+    const id = "2f34a7d5-0000-4000-8000-000000000001";
+    for (const ok of ["https://shop.com/logo.png", `/shop-logo/${id}?v=1793600000000`]) {
+      expect(settingsInputSchema.parse({ ...valid, logoUrl: ok }).logoUrl).toBe(ok);
+    }
+    for (const bad of [`/shop-logo/${id}`, `/shop-logo/${id}?v=1&x=2`, "/psg/shops", `//evil.example/shop-logo/${id}?v=1`]) {
+      expect(settingsInputSchema.safeParse({ ...valid, logoUrl: bad }).success, bad).toBe(false);
+    }
+  });
 });

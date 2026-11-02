@@ -232,6 +232,13 @@
       "when": 1792997051975,
       "tag": "0032_drop_redundant_legacy_case_index",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793611036258,
+      "tag": "0033_shop_logo",
+      "breakpoints": true
     }
   ]
 }

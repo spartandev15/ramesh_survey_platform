@@ -29,6 +29,8 @@ async function answerDemo(page: Page, prefix: string, rating: string) {
   for (const row of ["Communication during the repair", "Quality of the repair", "Cleanliness of the vehicle at pickup"]) {
     await page.getByRole("group", { name: row }).getByLabel("Good").check();
   }
+  // The public form shows one page at a time; the paper sheet shows all of them.
+  if (prefix === "public") await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.locator(`input[name="${prefix}-recommend_score"][value="9"]`).check({ force: true });
 }
 
@@ -49,8 +51,9 @@ test("public, paper, duplicate and correction flows", async ({ page, browser }) 
   await expect(phone.getByRole("heading", { name: `Tell ${TEST_SHOP.name} about your repair` })).toBeVisible();
   await phone.getByLabel("Your name").fill("Quinn Tester");
   await phone.getByLabel("Repair order or claim number").fill(`${id}-1`);
-  await phone.getByRole("button", { name: "Send feedback" }).click();
-  await expect(phone.getByRole("alert").filter({ hasText: "Some answers need attention" })).toBeFocused();
+  // The public form goes one page at a time: Next checks the page first (SR-39).
+  await phone.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(phone.getByRole("alert").filter({ hasText: "Please check" })).toBeFocused();
   await answerDemo(phone, "public", "4");
   await phone.getByRole("button", { name: "Send feedback" }).click();
   await expect(phone.getByRole("heading", { name: "Thank you for your feedback" })).toBeVisible();

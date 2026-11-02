@@ -4,6 +4,7 @@ import {
   bigserial,
   boolean,
   check,
+  customType,
   date,
   index,
   integer,
@@ -34,6 +35,18 @@ export const shop = pgTable("shop", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
+});
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
+
+/** A logo uploaded for a shop (SR-02), served at /shop-logo/{shopId}. One per shop; a new upload replaces it. */
+export const shopLogo = pgTable("shop_logo", {
+  shopId: uuid("shop_id")
+    .primaryKey()
+    .references(() => shop.id),
+  contentType: text("content_type").notNull(),
+  data: bytea("data").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const psgRole = pgEnum("psg_role", ["psg_admin", "psg_operator", "psg_reviewer"]);

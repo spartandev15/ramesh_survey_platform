@@ -2,7 +2,7 @@
 
 import { CheckCircle2 } from "lucide-react";
 import { useRef, useState } from "react";
-import { AnswerSheet, submissionErrors } from "@/components/survey/answer-sheet";
+import { PagedAnswerSheet } from "@/components/survey/pager";
 import type { InstrumentDefinition } from "@/modules/instruments/definition";
 import type { Answers } from "@/modules/instruments/evaluate";
 import { submitPublicAction } from "./actions";
@@ -46,16 +46,9 @@ export function PublicSurveyForm({
     );
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  // Each page was checked on Next; the server checks everything again.
+  async function submit() {
     if (pending) return;
-    const problems = submissionErrors(definition, answers);
-    if (problems.size > 0) {
-      setErrors(problems);
-      setMessage("Some answers need attention. They are marked below.");
-      requestAnimationFrame(() => summaryRef.current?.focus());
-      return;
-    }
     setPending(true);
     setMessage(null);
     try {
@@ -78,62 +71,63 @@ export function PublicSurveyForm({
   const setCtx = (key: keyof typeof context) => (e: React.ChangeEvent<HTMLInputElement>) => setContext((c) => ({ ...c, [key]: e.target.value }));
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-brand-navy-900">Tell {shopName} about your repair</h1>
-        <p className="mt-2 text-sm text-gray-600">It takes a few minutes. Your answers help the team know what is working and what to improve.</p>
-      </div>
-      {message && (
-        <div ref={summaryRef} tabIndex={-1} role="alert" className="rounded-lg border border-brand-red/30 bg-brand-red/5 px-4 py-3 text-sm text-brand-red-dark">
-          {message}
+    <PagedAnswerSheet
+      definition={definition}
+      answers={answers}
+      onChange={(next) => {
+        setAnswers(next);
+        if (errors.size) setErrors(new Map());
+      }}
+      errors={errors}
+      idPrefix="public"
+      finishLabel={pending ? "Sending…" : "Send feedback"}
+      pending={pending}
+      onFinish={() => void submit()}
+      notice={
+        message && (
+          <div ref={summaryRef} tabIndex={-1} role="alert" className="mb-6 rounded-lg border border-brand-red/30 bg-brand-red/5 px-4 py-3 text-sm text-brand-red-dark">
+            {message}
+          </div>
+        )
+      }
+      first={
+        <div className="mb-8 flex flex-col gap-6">
+          <div>
+            <h1 className="text-xl font-semibold text-brand-navy-900">Tell {shopName} about your repair</h1>
+            <p className="mt-2 text-sm text-gray-600">It takes a few minutes. Your answers help the team know what is working and what to improve.</p>
+          </div>
+          <fieldset className="flex flex-col gap-4 rounded-lg bg-gray-50 p-4">
+            <legend className="px-1 text-sm font-semibold text-gray-800">About your visit (optional)</legend>
+            <p className="text-xs text-gray-600">This helps connect your feedback to your repair. You can leave any of it blank.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="ctx-name" className="text-sm font-medium text-gray-700">
+                  Your name
+                </label>
+                <input id="ctx-name" autoComplete="name" value={context.name} onChange={setCtx("name")} className={field} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="ctx-ro" className="text-sm font-medium text-gray-700">
+                  Repair order or claim number
+                </label>
+                <input id="ctx-ro" value={context.repairOrder} onChange={setCtx("repairOrder")} className={field} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="ctx-date" className="text-sm font-medium text-gray-700">
+                  When you picked up your vehicle
+                </label>
+                <input id="ctx-date" type="date" value={context.repairDate} onChange={setCtx("repairDate")} className={field} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="ctx-contact" className="text-sm font-medium text-gray-700">
+                  Email or phone
+                </label>
+                <input id="ctx-contact" autoComplete="email" value={context.contact} onChange={setCtx("contact")} className={field} />
+              </div>
+            </div>
+          </fieldset>
         </div>
-      )}
-
-      <fieldset className="flex flex-col gap-4 rounded-xl bg-gray-50 p-4">
-        <legend className="px-1 text-sm font-semibold text-gray-800">About your visit (optional)</legend>
-        <p className="text-xs text-gray-600">This helps connect your feedback to your repair. You can leave any of it blank.</p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="ctx-name" className="text-sm font-medium text-gray-700">
-              Your name
-            </label>
-            <input id="ctx-name" autoComplete="name" value={context.name} onChange={setCtx("name")} className={field} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="ctx-ro" className="text-sm font-medium text-gray-700">
-              Repair order or claim number
-            </label>
-            <input id="ctx-ro" value={context.repairOrder} onChange={setCtx("repairOrder")} className={field} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="ctx-date" className="text-sm font-medium text-gray-700">
-              When you picked up your vehicle
-            </label>
-            <input id="ctx-date" type="date" value={context.repairDate} onChange={setCtx("repairDate")} className={field} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="ctx-contact" className="text-sm font-medium text-gray-700">
-              Email or phone
-            </label>
-            <input id="ctx-contact" autoComplete="email" value={context.contact} onChange={setCtx("contact")} className={field} />
-          </div>
-        </div>
-      </fieldset>
-
-      <AnswerSheet
-        definition={definition}
-        answers={answers}
-        onChange={(next) => {
-          setAnswers(next);
-          if (errors.size) setErrors(new Map());
-        }}
-        errors={errors}
-        idPrefix="public"
-      />
-
-      <button type="submit" disabled={pending} aria-busy={pending} className="self-start rounded-lg bg-brand-red px-6 py-3 text-sm font-semibold text-white hover:bg-brand-red-dark disabled:opacity-60">
-        {pending ? "Sending…" : "Send feedback"}
-      </button>
-    </form>
+      }
+    />
   );
 }

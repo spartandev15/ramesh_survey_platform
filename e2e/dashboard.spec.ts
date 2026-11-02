@@ -63,6 +63,7 @@ test("a shop user sees their own results immediately and nothing from other shop
   for (const row of ["Communication during the repair", "Quality of the repair", "Cleanliness of the vehicle at pickup"]) {
     await phone.getByRole("group", { name: row }).getByLabel("Poor").check();
   }
+  await phone.getByRole("button", { name: "Next", exact: true }).click();
   await phone.locator('input[name="public-recommend_score"][value="2"]').check({ force: true });
   await phone.getByRole("button", { name: "Send feedback" }).click();
   await expect(phone.getByRole("heading", { name: "Thank you for your feedback" })).toBeVisible();

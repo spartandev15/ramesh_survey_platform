@@ -1,10 +1,11 @@
 "use client";
 
+import { Loader2, Upload } from "lucide-react";
 import { useState, useTransition } from "react";
 import { FormAlert } from "@/components/form/form-alert";
-import { ShopHeader } from "@/app/survey/shop-header";
+import { ShopBrand, ShopHeader } from "@/app/survey/shop-header";
 import { US_TIMEZONES } from "@/modules/shops/fields";
-import { saveSettingsAction, type SettingsFormValues } from "./actions";
+import { saveSettingsAction, uploadLogoAction, type SettingsFormValues } from "./actions";
 
 export interface VersionChoice {
   id: string;
@@ -58,6 +59,7 @@ export function SettingsForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<{ tone: "error" | "success"; text: string; issues?: string[] } | null>(null);
   const [pending, startTransition] = useTransition();
+  const [uploading, setUploading] = useState(false);
 
   const set = (key: keyof SettingsFormValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setValues((v) => ({ ...v, [key]: e.target.value }));
@@ -82,6 +84,27 @@ export function SettingsForm({
       setFieldErrors(result.fieldErrors ?? {});
       setMessage({ tone: "error", text: result.message, issues: result.issues });
     });
+  }
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setMessage(null);
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.set("logo", file);
+      const result = await uploadLogoAction(shopId, form);
+      if (!result.ok) return setFieldErrors((f) => ({ ...f, logoUrl: result.message }));
+      setValues((v) => ({ ...v, logoUrl: result.url }));
+      setFieldErrors((f) => Object.fromEntries(Object.entries(f).filter(([key]) => key !== "logoUrl")));
+      setMessage({ tone: "success", text: "Logo uploaded. Save settings to show it on the survey." });
+    } catch {
+      setFieldErrors((f) => ({ ...f, logoUrl: "The logo could not be uploaded. Try again." }));
+    } finally {
+      setUploading(false);
+    }
   }
 
   const timezones = US_TIMEZONES.includes(values.timezone) ? US_TIMEZONES : [values.timezone, ...US_TIMEZONES];
@@ -166,8 +189,22 @@ export function SettingsForm({
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-3 text-base font-semibold text-brand-navy-900">Branding</legend>
         <div className="sm:col-span-2">
-          <Field id="logoUrl" label="Approved logo link" hint="An https:// image link. If it fails to load, the survey shows the shop name instead." error={fieldErrors.logoUrl}>
-            <input id="logoUrl" type="url" value={values.logoUrl} onChange={set("logoUrl")} placeholder="https://" {...aria("logoUrl", true)} />
+          <Field
+            id="logoUrl"
+            label="Approved logo link"
+            hint="Upload an image (PNG, JPG, WebP or GIF, up to 500 KB) or paste an https:// image link, then save settings. If it fails to load, the survey shows the shop name instead."
+            error={fieldErrors.logoUrl}
+          >
+            <div className="flex gap-2">
+              <input id="logoUrl" value={values.logoUrl} onChange={set("logoUrl")} placeholder="https://" {...aria("logoUrl", true)} />
+              {canManage && (
+                <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:border-brand-navy-700 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand-red">
+                  {uploading ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Upload aria-hidden="true" className="size-4" />}
+                  {uploading ? "Uploading…" : "Upload logo"}
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={upload} disabled={uploading} className="sr-only" />
+                </label>
+              )}
+            </div>
           </Field>
         </div>
         <Field id="brandColor" label="Brand colour" hint="Header colour on the survey, like #001c3d. Text colour adjusts for contrast." error={fieldErrors.brandColor}>
@@ -185,8 +222,9 @@ export function SettingsForm({
         </Field>
         <div className="sm:col-span-2">
           <p className="text-sm font-medium text-gray-700">Preview</p>
-          <div className="mt-1.5 overflow-hidden rounded-lg border border-gray-200">
-            <ShopHeader key={values.logoUrl} name={shopName} logoUrl={values.logoUrl || null} brandColor={values.brandColor || null} />
+          <div className="mt-1.5 overflow-hidden rounded-lg border border-gray-200 bg-surface">
+            <ShopHeader name={shopName} brandColor={values.brandColor || null} />
+            <ShopBrand key={values.logoUrl} name={shopName} logoUrl={values.logoUrl || null} />
           </div>
         </div>
       </fieldset>

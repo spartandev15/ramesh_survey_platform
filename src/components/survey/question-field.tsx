@@ -55,7 +55,7 @@ export function QuestionField({ question, value, error, idPrefix, required, onCh
     case "number":
       return (
         <div>
-          <label htmlFor={id} className="block font-medium text-gray-900">
+          <label htmlFor={id} className="block font-semibold text-gray-900">
             {heading}
           </label>
           {helpAndError}
@@ -97,7 +97,7 @@ export function QuestionField({ question, value, error, idPrefix, required, onCh
       if (question.display === "dropdown") {
         return (
           <div>
-            <label htmlFor={id} className="block font-medium text-gray-900">
+            <label htmlFor={id} className="block font-semibold text-gray-900">
               {heading}
             </label>
             {helpAndError}
@@ -121,11 +121,11 @@ export function QuestionField({ question, value, error, idPrefix, required, onCh
       }
       return (
         <fieldset aria-describedby={describedBy} aria-invalid={Boolean(error)}>
-          <legend className="font-medium text-gray-900">{heading}</legend>
+          <legend className="font-semibold text-gray-900">{heading}</legend>
           {helpAndError}
           <div className="mt-3 flex flex-col gap-2">
             {question.choices.map((c) => (
-              <label key={c.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:border-brand-navy-700 has-[:checked]:border-brand-navy-900 has-[:checked]:bg-brand-navy-900/5">
+              <label key={c.id} className="flex cursor-pointer items-center gap-3 rounded px-1 py-1.5 text-[15px] text-gray-800 hover:bg-gray-50">
                 <input type="radio" name={id} value={c.id} checked={value === c.id} onChange={() => onChange(c.id)} className="size-4 accent-brand-navy-900" />
                 {c.label}
               </label>
@@ -138,12 +138,12 @@ export function QuestionField({ question, value, error, idPrefix, required, onCh
       const selected = Array.isArray(value) ? value : [];
       return (
         <fieldset aria-describedby={describedBy} aria-invalid={Boolean(error)}>
-          <legend className="font-medium text-gray-900">{heading}</legend>
+          <legend className="font-semibold text-gray-900">{heading}</legend>
           {helpAndError}
           <p className="mt-1 text-xs text-gray-500">Choose all that apply.</p>
-          <div className="mt-3 flex flex-col gap-2">
+          <div className="mt-3 flex flex-col gap-1">
             {question.choices.map((c) => (
-              <label key={c.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:border-brand-navy-700 has-[:checked]:border-brand-navy-900 has-[:checked]:bg-brand-navy-900/5">
+              <label key={c.id} className="flex cursor-pointer items-center gap-3 rounded px-1 py-1.5 text-[15px] text-gray-800 hover:bg-gray-50">
                 <input
                   type="checkbox"
                   checked={selected.includes(c.id)}
@@ -166,7 +166,7 @@ export function QuestionField({ question, value, error, idPrefix, required, onCh
       const points = Array.from({ length: Math.min(101, Math.max(0, question.max - question.min + 1)) }, (_, i) => question.min + i);
       return (
         <fieldset aria-describedby={describedBy} aria-invalid={Boolean(error)}>
-          <legend className="font-medium text-gray-900">{heading}</legend>
+          <legend className="font-semibold text-gray-900">{heading}</legend>
           {helpAndError}
           <div className="mt-3 flex flex-wrap gap-2">
             {points.map((p) => (
@@ -198,7 +198,7 @@ export function QuestionField({ question, value, error, idPrefix, required, onCh
       const setCell = (row: string, column: string) => onChange({ ...cells, [row]: column });
       return (
         <fieldset aria-describedby={describedBy} aria-invalid={Boolean(error)}>
-          <legend className="font-medium text-gray-900">{heading}</legend>
+          <legend className="font-semibold text-gray-900">{heading}</legend>
           {helpAndError}
           <div className="mt-3 flex flex-col gap-4">
             {question.rows.map((row) => (

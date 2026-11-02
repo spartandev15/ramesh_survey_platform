@@ -75,12 +75,11 @@ test("PSG adds questions for one shop and customers see them after the shared su
   try {
     // 4. The customer sees them after the shared questions, on the public form.
     const phone = await respondentPhone(browser);
+    // The form goes one page at a time; the shop's own page comes last.
     await phone.goto(`/survey/shop/${TEST_SHOP.slug}`);
     const shared = phone.getByText("How likely are you to recommend this shop to a friend?");
     const own = phone.getByText(question);
-    await expect(shared).toBeVisible();
-    await expect(own).toBeVisible();
-    expect((await own.boundingBox())!.y).toBeGreaterThan((await shared.boundingBox())!.y);
+    const next = phone.getByRole("button", { name: "Next", exact: true });
 
     const name = `Addition Customer ${unique()}`;
     await phone.getByLabel("Your name").fill(name);
@@ -89,7 +88,13 @@ test("PSG adds questions for one shop and customers see them after the shared su
     for (const row of ["Communication during the repair", "Quality of the repair", "Cleanliness of the vehicle at pickup"]) {
       await phone.getByRole("group", { name: row }).getByLabel("Excellent").check();
     }
+    await next.click();
+    await expect(shared).toBeVisible();
+    await expect(own).toHaveCount(0);
     await phone.locator('input[name="public-recommend_score"][value="10"]').check({ force: true });
+    await next.click();
+    await expect(own).toBeVisible();
+    await expect(shared).toHaveCount(0);
     await phone.getByLabel(question).fill("Plenty of spaces");
     await phone.getByRole("button", { name: "Send feedback" }).click();
     await expect(phone.getByRole("heading", { name: "Thank you for your feedback" })).toBeVisible();

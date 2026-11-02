@@ -50,6 +50,9 @@ function isValidTimezone(timezone: string): boolean {
   }
 }
 
+/** The address of a logo uploaded to this app (src/app/shop-logo/[shopId]/route.ts); ?v= changes with each upload. */
+export const UPLOADED_LOGO_RE = /^\/shop-logo\/[0-9a-f-]{36}\?v=\d+$/;
+
 /** Blank means "not set". */
 const optionalText = (schema: z.ZodType<string, string>) =>
   z
@@ -68,8 +71,10 @@ export const settingsInputSchema = z.object({
     .array(z.string().trim().toLowerCase().pipe(z.email("Each alert recipient must be an email address")))
     .max(MAX_ALERT_RECIPIENTS, `Use at most ${MAX_ALERT_RECIPIENTS} alert recipients`)
     .transform((list) => [...new Set(list)]),
-  // Shop logos are shown to customers, so only secure links are accepted (SR-02).
-  logoUrl: optionalText(z.url("Enter a full https:// link").max(500).refine((v) => v.startsWith("https://"), "Use an https:// link")),
+  // Shop logos are shown to customers, so only secure links or this app's own uploaded logo are accepted (SR-02).
+  logoUrl: optionalText(
+    z.union([z.string().regex(UPLOADED_LOGO_RE), z.url("Enter a full https:// link").max(500).refine((v) => v.startsWith("https://"), "Use an https:// link")]),
+  ),
   brandColor: optionalText(z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #1a2b3c")),
 });
 

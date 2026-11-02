@@ -3,6 +3,7 @@
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PagerButtons, SurveyProgress } from "@/components/survey/pager";
 import { QuestionField } from "@/components/survey/question-field";
 import type { InstrumentDefinition } from "@/modules/instruments/definition";
 import { allQuestions } from "@/modules/instruments/questions";
@@ -268,26 +269,19 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
         if (isLast) void submit();
         else next();
       }}
-      className="flex flex-col gap-6"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
-        <span>
-          Page {position + 1} of {pages.length}
-        </span>
+      <div className="mb-4 flex justify-end text-sm text-gray-600">
         <SaveIndicator status={status} onRetry={() => void save()} />
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-gray-200" aria-hidden="true">
-        <div className="h-full rounded-full bg-brand-navy-900 transition-all" style={{ width: `${((position + 1) / pages.length) * 100}%` }} />
-      </div>
 
-      {position === 0 && definition.intro && <p className="text-gray-700">{definition.intro}</p>}
+      {position === 0 && definition.intro && <p className="mb-6 text-gray-700">{definition.intro}</p>}
 
-      <h1 ref={headingRef} tabIndex={-1} className="text-xl font-semibold text-brand-navy-900 outline-none">
-        {current.page.title ?? `Part ${position + 1}`}
+      <h1 ref={headingRef} tabIndex={-1} className={current.page.title ? "mb-6 text-xl font-semibold text-brand-navy-900 outline-none" : "sr-only"}>
+        {current.page.title ?? `Part ${position + 1} of ${pages.length}`}
       </h1>
 
       {errorList.length > 0 && (
-        <div ref={errorSummaryRef} tabIndex={-1} role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900 outline-none">
+        <div ref={errorSummaryRef} tabIndex={-1} role="alert" className="mb-6 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900 outline-none">
           <p className="font-semibold">
             <AlertCircle aria-hidden="true" className="mr-1 inline size-4" />
             Please check {errorList.length === 1 ? "this answer" : `these ${errorList.length} answers`}:
@@ -305,39 +299,24 @@ export function RespondentForm({ token, definition, initialAnswers, initialRevis
         </div>
       )}
 
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col divide-y divide-gray-200">
         {current.page.questions
           .filter((q) => visible.has(q.id))
           .map((q) => (
-            <div key={q.id} id={`q-${q.id}`} className="scroll-mt-6">
+            <div key={q.id} id={`q-${q.id}`} className="scroll-mt-6 py-6 first:pt-0">
               <QuestionField idPrefix="survey" question={q} value={answers[q.id]} error={errors.get(q.id)} required={isRequired(q.id)} onChange={(v) => setAnswer(q.id, v)} />
             </div>
           ))}
       </div>
 
       {submitError && (
-        <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-900">
+        <p role="alert" className="mt-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-900">
           {submitError}
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-5">
-        {position > 0 ? (
-          <button type="button" onClick={() => goTo(position - 1)} className="rounded-lg border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:border-brand-navy-700">
-            Back
-          </button>
-        ) : (
-          <span />
-        )}
-        <button
-          type="submit"
-          disabled={submitting}
-          aria-busy={submitting}
-          className="rounded-lg bg-brand-red px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-red-dark disabled:opacity-60"
-        >
-          {isLast ? (submitting ? "Submitting…" : "Submit survey") : "Next"}
-        </button>
-      </div>
+      <PagerButtons onBack={position > 0 ? () => goTo(position - 1) : undefined} next={isLast ? (submitting ? "Submitting…" : "Submit survey") : "Next"} pending={submitting} />
+      <SurveyProgress position={position} total={pages.length} />
     </form>
   );
 }

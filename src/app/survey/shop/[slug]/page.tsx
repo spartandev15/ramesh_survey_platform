@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Link2Off } from "lucide-react";
 import { loadPublicForm } from "@/modules/responses/public-form";
-import { ShopHeader } from "../../shop-header";
+import { SurveyFrame } from "../../shop-header";
 import { PublicSurveyForm } from "./public-form";
 
 export const metadata: Metadata = { title: "Customer survey", robots: { index: false, follow: false }, referrer: "no-referrer" };
@@ -25,14 +25,8 @@ export default async function PublicShopSurveyPage({ params }: PageProps<"/surve
     );
   }
   return (
-    <div className="min-h-screen bg-surface">
-      <ShopHeader name={form.shop.name} logoUrl={form.shop.logoUrl} brandColor={form.shop.brandColor} />
-      {form.isTest && <p className="bg-amber-100 px-4 py-2 text-center text-sm font-medium text-amber-900">Test survey for internal testing only. Answers are test data and never count in reports.</p>}
-      <main className="mx-auto max-w-2xl px-4 py-8">
-        <div className="rounded-2xl bg-white p-5 shadow-sm sm:p-8">
-          <PublicSurveyForm slug={slug} versionId={form.versionId} additionVersionId={form.additionVersionId} shopName={form.shop.name} definition={form.definition} />
-        </div>
-      </main>
-    </div>
+    <SurveyFrame shop={form.shop} test={form.isTest}>
+      <PublicSurveyForm slug={slug} versionId={form.versionId} additionVersionId={form.additionVersionId} shopName={form.shop.name} definition={form.definition} />
+    </SurveyFrame>
   );
 }

@@ -102,15 +102,49 @@ test("a logo that fails to load falls back to the shop name, and survey pages ar
     for (const view of [phone, desktop]) {
       const response = await view.goto(`/survey/shop/${TEST_SHOP.slug}`);
       expect(response?.headers()["cache-control"]).toContain("no-store");
-      const header = view.locator("header").first();
-      await expect(header.getByText(TEST_SHOP.name, { exact: true })).toBeVisible();
-      await expect(header.locator("img")).toHaveCount(0);
+      const brand = view.locator("[data-shop-brand]");
+      await expect(brand.getByText(TEST_SHOP.name, { exact: true })).toBeVisible();
+      await expect(brand.locator("img")).toHaveCount(0);
     }
     // A personalized link, even an invalid one, is never cached either.
     const tokenPage = await phone.request.get(`/survey/${"A".repeat(43)}`);
     expect(tokenPage.headers()["cache-control"]).toContain("no-store");
   } finally {
     await save("");
+  }
+});
+
+test("an uploaded logo shows centred on the survey, and a file that is not an image is refused (SR-02)", async ({ page, browser }) => {
+  test.setTimeout(240_000);
+  await signIn(page);
+  await ensureTestShop(page);
+  await openShop(page, TEST_SHOP.name);
+  const upload = page.getByText("Upload logo").locator("input[type=file]");
+  const logo = page.getByLabel("Approved logo link");
+
+  await upload.setInputFiles({ name: "logo.txt", mimeType: "image/png", buffer: Buffer.from("not an image") });
+  await expect(page.getByText("Use a PNG, JPG, WebP or GIF image.")).toBeVisible();
+
+  // A 1x1 PNG.
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+  await upload.setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: png });
+  await expect(logo).toHaveValue(/^\/shop-logo\/[0-9a-f-]{36}\?v=\d+$/);
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByText("Settings saved.")).toBeVisible();
+
+  try {
+    const phone = await respondentPhone(browser);
+    await phone.goto(`/survey/shop/${TEST_SHOP.slug}`);
+    const img = phone.locator("[data-shop-brand] img");
+    await expect(img).toHaveJSProperty("complete", true);
+    expect(await img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1);
+  } finally {
+    await expect(async () => {
+      await logo.fill("");
+      await expect(logo).toHaveValue("", { timeout: 2000 });
+    }).toPass({ timeout: 60_000 });
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByText("Settings saved.")).toBeVisible();
   }
 });
 

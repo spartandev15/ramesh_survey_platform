@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { clientAddress } from "@/lib/rate-limit";
 import { openSurvey, RateLimitedError } from "@/modules/responses/respondent";
 import type { SurveyContext, TokenState } from "@/modules/responses/store";
-import { ShopHeader } from "../shop-header";
+import { SurveyFrame } from "../shop-header";
 import { RenewalButton } from "./renewal-button";
 import { RespondentForm } from "./respondent-form";
 
@@ -34,30 +34,19 @@ export default async function SurveyPage({ params }: PageProps<"/survey/[token]"
 
   const { context } = state;
   return (
-    <div className="min-h-screen bg-surface">
-      <ShopHeader name={context.shop.name} logoUrl={context.shop.logoUrl} brandColor={context.shop.brandColor} />
-      {context.isTest && <TestBanner />}
-      <main className="mx-auto max-w-2xl px-4 py-8">
-        <div className="rounded-2xl bg-white p-5 shadow-sm sm:p-8">
-          {state.state === "open" && (
-            <>
-              <p className="mb-6 text-sm text-gray-600">
-                {context.shop.name} would like your feedback on your recent repair. Your answers are saved as you go, so you can finish later with this same link.
-              </p>
-              <RespondentForm
-                token={token}
-                definition={context.definition}
-                initialAnswers={state.answers}
-                initialRevision={state.revision}
-                initialSavedAt={state.savedAt?.toISOString() ?? null}
-              />
-            </>
-          )}
-          {state.state === "submitted" && <Submitted context={context} submittedAt={state.submittedAt} />}
-          {state.state === "expired" && <Expired context={context} token={token} />}
-        </div>
-      </main>
-    </div>
+    <SurveyFrame shop={context.shop} test={context.isTest}>
+      {state.state === "open" && (
+        <RespondentForm
+          token={token}
+          definition={context.definition}
+          initialAnswers={state.answers}
+          initialRevision={state.revision}
+          initialSavedAt={state.savedAt?.toISOString() ?? null}
+        />
+      )}
+      {state.state === "submitted" && <Submitted context={context} submittedAt={state.submittedAt} />}
+      {state.state === "expired" && <Expired context={context} token={token} />}
+    </SurveyFrame>
   );
 }
 
@@ -104,14 +93,6 @@ function Expired({ context, token }: { context: SurveyContext; token: string }) 
         .
       </p>
     </div>
-  );
-}
-
-function TestBanner() {
-  return (
-    <p className="bg-amber-100 px-4 py-2 text-center text-sm font-medium text-amber-900">
-      Test survey for internal testing only. Answers are test data and never count in reports.
-    </p>
   );
 }
 

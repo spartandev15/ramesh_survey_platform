@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isAccessError } from "@/modules/access/errors";
 import { openShopAddition } from "@/modules/instruments/instruments";
+import { uploadShopLogo } from "@/modules/shops/logo";
 import { changeShopMode, setShopAdditionVersion, setShopLegacyCoverage, updateShopSettings } from "@/modules/shops/settings";
 import { SHOP_MODES, settingsInputSchema, splitRecipients, type ShopMode } from "@/modules/shops/settings-policy";
 import { ShopSettingsError } from "@/modules/shops/settings-store";
@@ -47,6 +48,19 @@ export async function saveSettingsAction(shopId: string, expectedRevision: numbe
     return { ok: true, revision: saved.revision };
   } catch (error) {
     return failure(error);
+  }
+}
+
+/** Store an uploaded logo; the form then shows its address, and Save settings puts it on the surveys. */
+export async function uploadLogoAction(shopId: string, form: FormData): Promise<{ ok: true; url: string } | { ok: false; message: string }> {
+  const file = form.get("logo");
+  if (!(file instanceof File)) return { ok: false, message: "Choose an image file." };
+  try {
+    return { ok: true, url: await uploadShopLogo(shopId, file) };
+  } catch (error) {
+    if (error instanceof ShopSettingsError) return { ok: false, message: error.message };
+    if (isAccessError(error)) return { ok: false, message: "You do not have permission to change shop settings." };
+    throw error;
   }
 }
 
