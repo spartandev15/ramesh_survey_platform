@@ -178,6 +178,27 @@ export async function publishVersion(
   return published;
 }
 
+/**
+ * Move a published TEST version to production: the same content becomes the next version,
+ * published as non-test with the approved source (G-01, AT-14). The test version itself never
+ * changes, so its hash, test links and test responses stay as they were.
+ */
+export async function promoteToProduction(tx: Tx, actor: Actor, versionId: string, sourceNote: string): Promise<InstrumentVersionRow> {
+  const [source] = await tx.select().from(instrumentVersion).where(eq(instrumentVersion.id, versionId));
+  if (!source) throw new InstrumentNotFoundError();
+  if (source.status !== "published") throw new InstrumentConflictError("Publish this version first.");
+  if (!source.isTest) throw new InstrumentConflictError("This version is already a production version.");
+  if (!sourceNote.trim()) throw new DefinitionInvalidError([{ path: "sourceNote", message: "Record the approved source before publishing a non-test version" }]);
+  const [draft] = await tx
+    .select({ id: instrumentVersion.id })
+    .from(instrumentVersion)
+    .where(and(eq(instrumentVersion.instrumentId, source.instrumentId), eq(instrumentVersion.status, "draft")));
+  if (draft) throw new InstrumentConflictError("This survey has an open draft. Publish or discard it first.");
+
+  const next = await createDraftFrom(tx, actor, versionId);
+  return publishVersion(tx, actor, next.id, next.revision, { isTest: false, sourceNote });
+}
+
 /** Start the next version from an existing one. Published versions are never edited in place. */
 export async function createDraftFrom(tx: Tx, actor: Actor, fromVersionId: string): Promise<InstrumentVersionRow> {
   const [source] = await tx.select().from(instrumentVersion).where(eq(instrumentVersion.id, fromVersionId));

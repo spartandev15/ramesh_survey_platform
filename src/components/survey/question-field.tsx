@@ -22,7 +22,8 @@ const inputClass =
  */
 export function QuestionField({ question, value, error, idPrefix, required, onChange }: QuestionFieldProps) {
   const id = `${idPrefix}-${question.id}`;
-  const describedBy = [question.description ? `${id}-desc` : null, error ? `${id}-error` : null].filter(Boolean).join(" ") || undefined;
+  // The help text is part of the label (shown right after the question, like a paper form), so only the error is linked here.
+  const describedBy = error ? `${id}-error` : undefined;
   const heading = (
     <>
       {question.title}
@@ -32,15 +33,11 @@ export function QuestionField({ question, value, error, idPrefix, required, onCh
         </span>
       )}
       {required && <span className="sr-only"> (required)</span>}
+      {question.description && <span className="ml-1.5 text-xs font-normal text-gray-500">{question.description}</span>}
     </>
   );
   const helpAndError = (
     <>
-      {question.description && (
-        <p id={`${id}-desc`} className="mt-1 text-sm text-gray-500">
-          {question.description}
-        </p>
-      )}
       {error && (
         <p id={`${id}-error`} className="mt-2 text-sm font-medium text-red-700">
           <span aria-hidden="true">⚠ </span>

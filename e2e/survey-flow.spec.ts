@@ -69,9 +69,21 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await page.getByRole("button", { name: "Publish…" }).click();
   await page.getByRole("button", { name: "Publish test version" }).click();
   await page.waitForURL(/\?version=1$/);
+  const instrumentPage = page.url();
   await expect(page.getByText("Test only").first()).toBeVisible();
   const versionHash = (await page.locator("dd.break-all.font-mono").first().textContent())?.trim();
   expect(versionHash).toMatch(/^[0-9a-f]{64}$/);
+
+  // 5b. The full-screen preview shows the version as customers see it, and saves nothing
+  const [preview] = await Promise.all([page.context().waitForEvent("page"), page.getByRole("link", { name: /Preview survey/ }).click()]);
+  await expect(preview.getByText(`Preview of ${name}, v1 (test). Answers are not saved.`)).toBeVisible();
+  await expect(preview.getByRole("progressbar", { name: "Survey progress" })).toBeVisible();
+  await preview.getByRole("button", { name: "Submit survey" }).click();
+  await expect(preview.getByRole("alert").filter({ hasText: "Please check" })).toBeFocused();
+  await preview.locator("label", { hasText: /^5$/ }).first().click();
+  await preview.getByRole("button", { name: "Submit survey" }).click();
+  await expect(preview.getByRole("heading", { name: "Thank you for your feedback" })).toBeVisible();
+  await preview.close();
 
   // 6. Respondent completes it on a phone, signed out
   const url = await createTestLink(page);
@@ -131,4 +143,25 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await page.getByRole("button", { name: "Create copy" }).click();
   await page.waitForURL(/\/edit$/);
   await expect(page.getByRole("button", { name: /repair_rating How satisfied/ })).toBeVisible();
+
+  // 11. A test version moves to production as the next version, with its approved source (AT-14)
+  await page.goto(instrumentPage);
+  await page.getByRole("button", { name: "Move to production" }).click();
+  // The draft from step 9 is still open: it must be published or discarded first.
+  await expect(page.getByText("This survey has an open draft. Publish or discard it first.")).toBeVisible();
+  await page.goto(instrumentPage.replace(/\?.*$/, "/edit"));
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Discard draft" }).click();
+  await page.waitForURL(/\/psg\/instruments\/[0-9a-f-]{36}$/);
+  await page.goto(instrumentPage);
+  await page.getByRole("button", { name: "Move to production" }).click();
+  await page.getByLabel("Approved source (required)").fill("Approved in the e2e test");
+  await page.getByRole("button", { name: /^Publish as production v\d+$/ }).click();
+  await page.waitForURL((u) => /^\?version=\d+$/.test(u.search) && u.search !== "?version=1");
+  const details = page.getByRole("region", { name: "Version details" });
+  await expect(details.getByText("Approved in the e2e test")).toBeVisible();
+  await expect(details.getByText("Test only")).toHaveCount(0);
+  // Version 1 itself stays a test version.
+  await page.goto(instrumentPage);
+  await expect(page.getByRole("region", { name: "Version details" }).getByText("Test only")).toBeVisible();
 });

@@ -59,6 +59,17 @@ export async function publishAction(input: {
   }
 }
 
+/** Publish a TEST version's content again as the next, production version. */
+export async function promoteAction(input: { versionId: string; sourceNote: string }): Promise<ActionResult<{ instrumentId: string; version: number }>> {
+  try {
+    const published = await instruments.promoteToProduction(input.versionId, input.sourceNote);
+    refresh(published.instrumentId);
+    return { ok: true, instrumentId: published.instrumentId, version: published.version };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 export async function discardDraftAction(input: { versionId: string; expectedRevision: number }): Promise<ActionResult<{ instrumentId: string }>> {
   try {
     const { instrumentId } = await instruments.discardDraft(input.versionId, input.expectedRevision);

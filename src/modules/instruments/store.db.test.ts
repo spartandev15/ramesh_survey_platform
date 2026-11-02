@@ -51,6 +51,24 @@ describe.skipIf(!hasDatabase)("instrument versions in the database", async () =>
       await expect(store.saveDraft(tx, actor, draft.id, 1, demoDefinition)).rejects.toBeInstanceOf(store.InstrumentConflictError);
     }));
 
+  it("moves a published test version to production as the next version, leaving the test version as it was (AT-14)", () =>
+    inRollback(async (tx) => {
+      const { draft } = await store.insertInstrument(tx, actor, { key: uniqueKey(), name: "Promote" }, demoDefinition);
+      const test = await store.publishVersion(tx, actor, draft.id, draft.revision, { isTest: true });
+      // A draft must not be open, and the approved source is required.
+      await expect(store.promoteToProduction(tx, actor, test.id, "  ")).rejects.toBeInstanceOf(store.DefinitionInvalidError);
+
+      const production = await store.promoteToProduction(tx, actor, test.id, "Approved by PSG, Alchemer 2.2");
+      expect(production).toMatchObject({ version: 2, status: "published", isTest: false, sourceNote: "Approved by PSG, Alchemer 2.2", basedOnVersionId: test.id });
+      expect(production.definitionHash).toBe(test.definitionHash);
+      const [still] = await tx.select().from(instrumentVersion).where(eq(instrumentVersion.id, test.id));
+      expect(still).toMatchObject({ isTest: true, status: "published", definitionHash: test.definitionHash });
+
+      await expect(store.promoteToProduction(tx, actor, production.id, "again")).rejects.toThrow("already a production version");
+      await store.createDraftFrom(tx, actor, production.id);
+      await expect(store.promoteToProduction(tx, actor, test.id, "with a draft open")).rejects.toThrow("open draft");
+    }));
+
   it("refuses to publish an invalid definition", () =>
     inRollback(async (tx) => {
       const { draft } = await store.insertInstrument(tx, actor, { key: uniqueKey(), name: "Empty" }, emptyDefinition());

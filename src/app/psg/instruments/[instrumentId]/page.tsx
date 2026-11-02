@@ -92,12 +92,14 @@ export default async function InstrumentPage({ params, searchParams }: PageProps
         </section>
       )}
 
-      {canManage && selected && (
+      {selected && (
         <VersionActions
           instrumentId={instrument.id}
           instrumentName={instrument.name}
-          selected={{ id: selected.id, version: selected.version, status: selected.status }}
+          selected={{ id: selected.id, version: selected.version, status: selected.status, isTest: selected.isTest, sourceNote: selected.sourceNote }}
           hasDraft={versions.some((v) => v.status === "draft")}
+          nextVersion={Math.max(...versions.map((v) => v.version)) + 1}
+          canManage={canManage}
         />
       )}
 

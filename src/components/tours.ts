@@ -122,6 +122,7 @@ export const TOURS: { id: string; path: RegExp; steps: TourStep[] }[] = [
       { target: "main h1", title: "Survey", text: "The survey's name and key. Its versions and content are below." },
       { target: "main nav[aria-label=\"Versions\"]", title: "Versions", text: "Each published version stays exactly as it was. Pick one to see its questions and rules." },
       { target: "main section[aria-label=\"Version details\"]", title: "Version details", text: "When this version was published, where its content came from and whether it is for testing only." },
+      { target: "[data-tour=\"version-actions\"]", title: "Preview and versions", text: "Preview survey opens it full screen as customers see it. Move to production publishes a test version again as the next, production version." },
       { target: "[aria-labelledby=\"test-links\"]", title: "Test links", text: "Create a link to try this version yourself. Test responses never count in any shop's scores." },
     ],
   },
