@@ -60,9 +60,9 @@ export async function publishAction(input: {
 }
 
 /** Publish a TEST version's content again as the next, production version. */
-export async function promoteAction(input: { versionId: string; sourceNote: string }): Promise<ActionResult<{ instrumentId: string; version: number }>> {
+export async function promoteAction(input: { versionId: string }): Promise<ActionResult<{ instrumentId: string; version: number }>> {
   try {
-    const published = await instruments.promoteToProduction(input.versionId, input.sourceNote);
+    const published = await instruments.promoteToProduction(input.versionId);
     refresh(published.instrumentId);
     return { ok: true, instrumentId: published.instrumentId, version: published.version };
   } catch (error) {

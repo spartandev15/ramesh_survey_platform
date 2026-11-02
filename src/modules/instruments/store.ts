@@ -180,15 +180,16 @@ export async function publishVersion(
 
 /**
  * Move a published TEST version to production: the same content becomes the next version,
- * published as non-test with the approved source (G-01, AT-14). The test version itself never
+ * published as non-test, its source note saying which test version it came from (G-01, AT-14). The test version itself never
  * changes, so its hash, test links and test responses stay as they were.
  */
-export async function promoteToProduction(tx: Tx, actor: Actor, versionId: string, sourceNote: string): Promise<InstrumentVersionRow> {
+export async function promoteToProduction(tx: Tx, actor: Actor, versionId: string): Promise<InstrumentVersionRow> {
   const [source] = await tx.select().from(instrumentVersion).where(eq(instrumentVersion.id, versionId));
   if (!source) throw new InstrumentNotFoundError();
   if (source.status !== "published") throw new InstrumentConflictError("Publish this version first.");
   if (!source.isTest) throw new InstrumentConflictError("This version is already a production version.");
-  if (!sourceNote.trim()) throw new DefinitionInvalidError([{ path: "sourceNote", message: "Record the approved source before publishing a non-test version" }]);
+  // PSG chose one-click promotion: the record of where production content came from is written for them.
+  const sourceNote = [source.sourceNote?.trim(), `Moved to production from test version ${source.version}.`].filter(Boolean).join(" ");
   const [draft] = await tx
     .select({ id: instrumentVersion.id })
     .from(instrumentVersion)

@@ -144,7 +144,7 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await page.waitForURL(/\/edit$/);
   await expect(page.getByRole("button", { name: /repair_rating How satisfied/ })).toBeVisible();
 
-  // 11. A test version moves to production as the next version, with its approved source (AT-14)
+  // 11. One click moves a test version to production as the next version (AT-14)
   await page.goto(instrumentPage);
   await page.getByRole("button", { name: "Move to production" }).click();
   // The draft from step 9 is still open: it must be published or discarded first.
@@ -155,12 +155,15 @@ test("PSG builds, publishes and tests a survey end to end", async ({ page, brows
   await page.waitForURL(/\/psg\/instruments\/[0-9a-f-]{36}$/);
   await page.goto(instrumentPage);
   await page.getByRole("button", { name: "Move to production" }).click();
-  await page.getByLabel("Approved source (required)").fill("Approved in the e2e test");
-  await page.getByRole("button", { name: /^Publish as production v\d+$/ }).click();
   await page.waitForURL((u) => /^\?version=\d+$/.test(u.search) && u.search !== "?version=1");
   const details = page.getByRole("region", { name: "Version details" });
-  await expect(details.getByText("Approved in the e2e test")).toBeVisible();
+  await expect(details.getByText("Moved to production from test version 1.")).toBeVisible();
   await expect(details.getByText("Test only")).toHaveCount(0);
+  // A production version offers Move to draft: an editable copy, the production version unchanged.
+  await expect(page.getByRole("button", { name: "Move to production" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Move to draft" }).click();
+  await page.waitForURL(/\/edit$/);
+  await page.goto(instrumentPage);
   // Version 1 itself stays a test version.
   await page.goto(instrumentPage);
   await expect(page.getByRole("region", { name: "Version details" }).getByText("Test only")).toBeVisible();

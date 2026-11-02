@@ -57,10 +57,10 @@ export async function publishVersion(versionId: string, expectedRevision: number
   return getDb().transaction((tx) => store.publishVersion(tx, actor, id, expectedRevision, options));
 }
 
-export async function promoteToProduction(versionId: string, sourceNote: string) {
+export async function promoteToProduction(versionId: string) {
   const actor = await actingUser("instrument.manage");
   const id = requireId(versionId);
-  return getDb().transaction((tx) => store.promoteToProduction(tx, actor, id, sourceNote));
+  return getDb().transaction((tx) => store.promoteToProduction(tx, actor, id));
 }
 
 export async function createDraftFrom(versionId: string) {
