@@ -16,6 +16,7 @@ describe.skipIf(!process.env.DATABASE_URL)("launch readiness manifest", async ()
   const instruments = await import("@/modules/instruments/store");
   const { demoDefinition } = await import("@/modules/instruments/demo-definition");
   const settings = await import("@/modules/shops/settings-store");
+  const { requireLaunchReady } = await import("@/modules/shops/settings");
   const { settingsInputSchema } = await import("@/modules/shops/settings-policy");
   const imports = await import("@/modules/imports/store");
   const readiness = await import("./store");
@@ -71,7 +72,6 @@ describe.skipIf(!process.env.DATABASE_URL)("launch readiness manifest", async ()
 
   it("refuses the first switch to Live while the checklist is open, but not a resume (SR-37)", () =>
     inRollback(async (tx) => {
-      const { requireLaunchReady } = await import("@/modules/shops/settings");
       const { ShopSettingsError } = settings;
       const s = await newShop(tx);
       await configure(tx, s.id);

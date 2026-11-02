@@ -66,4 +66,13 @@ test("a click on a link inside a page shows the loading bar until the list arriv
   await expect(page).toHaveURL(/status=draft/);
   await pageLoaded(page);
   await expect(draft).toHaveAttribute("aria-current", "true");
+
+  // The logo opens the workspace home itself; from there it never starts the bar (no redirect back here).
+  const logo = page.getByRole("link", { name: "PSG Survey home" });
+  await expect(logo).toHaveAttribute("href", "/psg");
+  await logo.click();
+  await expect(page).toHaveURL(/\/psg$/);
+  await pageLoaded(page);
+  await logo.click();
+  await expect(page.locator(".nav-progress")).toHaveCount(0);
 });

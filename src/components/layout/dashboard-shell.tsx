@@ -145,7 +145,8 @@ export function DashboardShell({ title, nav, userName, userEmail, search, notifi
         )}
       >
         <div className={classes("flex h-16 shrink-0 items-center border-b border-white/10", compact ? "justify-center px-2" : "px-5")}>
-          <Link href="/" aria-label="PSG Survey home" className="flex items-center">
+          {/* The workspace home itself, not "/": a redirect back to this page would leave the top bar running. */}
+          <Link href={nav[0]?.href ?? "/"} aria-label="PSG Survey home" className="flex items-center">
             {compact ? (
               <Image src="/brand/logo_mark.png" alt="" width={428} height={244} className="h-auto w-11" priority />
             ) : (
